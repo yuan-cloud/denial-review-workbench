@@ -16,6 +16,7 @@ It is the single source of truth for this sprint.
 - `App.tsx` uses a `View` union type for navigation — do not install React Router.
 - `vite.config.ts` must have `strictPort: true` — Vite must not silently increment the port.
 - After every meaningful code change: `uvicorn` restart + `curl /health` + browser smoke test.
+- Before editing any file, reserve it via Agent Mail `file_reservation_paths()`. If you get `FILE_RESERVATION_CONFLICT`, do not proceed — pick a different bead from `br ready` instead. Release reservations when your bead is closed. Never edit a file another agent has reserved.
 
 If anything below conflicts with the user, the user wins.
 
