@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
 import { getCases, postRun } from "../api";
+import {
+  WorkbenchButton,
+  WorkbenchNotice,
+  WorkbenchPageHeader,
+  WorkbenchPanel,
+  WorkbenchScreen,
+  WorkbenchSectionHeading,
+  WorkbenchStatusPill,
+  workbenchStyles,
+} from "../ui/workbench";
 
 interface Props {
   onSelectCase: (caseId: string, runId: string) => void;
@@ -27,53 +37,74 @@ export default function CaseListPage({ onSelectCase }: Props) {
   }
 
   return (
-    <div style={{ maxWidth: 600, margin: "40px auto", fontFamily: "system-ui, sans-serif" }}>
-      <h1 style={{ fontSize: 24, marginBottom: 8 }}>Denial Review Workbench</h1>
-      <p style={{ color: "#666", marginBottom: 24 }}>Select a case to review.</p>
+    <WorkbenchScreen maxWidth={1120}>
+      <div style={{ display: "grid", gap: 16 }}>
+        <WorkbenchPageHeader
+          eyebrow="Clinical ops workbench"
+          title="Denial Review Workbench"
+          description="Select a case to review."
+          actions={
+            loading ? (
+              <WorkbenchStatusPill tone="primary">Run in progress</WorkbenchStatusPill>
+            ) : null
+          }
+        />
 
-      {error && (
-        <div style={{ padding: 12, marginBottom: 16, background: "#fef2f2", color: "#b91c1c", borderRadius: 6 }}>
-          {error}
-        </div>
-      )}
+        {error ? (
+          <WorkbenchNotice title="Request failed" tone="danger">
+            {error}
+          </WorkbenchNotice>
+        ) : null}
 
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
-            <th style={{ textAlign: "left", padding: "8px 12px" }}>Case ID</th>
-            <th style={{ textAlign: "right", padding: "8px 12px" }}>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cases.map((c) => (
-            <tr key={c.case_id} style={{ borderBottom: "1px solid #e5e7eb" }}>
-              <td style={{ padding: "10px 12px", fontFamily: "monospace" }}>{c.case_id}</td>
-              <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                <button
-                  onClick={() => handleRun(c.case_id)}
-                  disabled={loading !== null}
-                  style={{
-                    padding: "6px 16px",
-                    background: loading === c.case_id ? "#9ca3af" : "#2563eb",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 4,
-                    cursor: loading !== null ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {loading === c.case_id ? "Analyzing..." : "Run Review"}
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        <WorkbenchPanel>
+          <WorkbenchSectionHeading
+            title="Case Queue"
+            description="Launch a denial review run for a synthetic case packet."
+          />
 
-      {loading && (
-        <p style={{ marginTop: 16, color: "#6b7280", textAlign: "center" }}>
-          Analyzing case — this takes 10–20 seconds...
-        </p>
-      )}
-    </div>
+          <table style={workbenchStyles.denseTable}>
+            <thead>
+              <tr style={workbenchStyles.denseTableHead}>
+                <th style={workbenchStyles.denseTableHeaderCell}>Case ID</th>
+                <th style={workbenchStyles.denseTableHeaderCell}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cases.map((c) => (
+                <tr key={c.case_id}>
+                  <td style={{ ...workbenchStyles.denseTableCell, ...workbenchStyles.mono }}>
+                    {c.case_id}
+                  </td>
+                  <td
+                    style={{
+                      ...workbenchStyles.denseTableCell,
+                      textAlign: "right",
+                      width: 140,
+                    }}
+                  >
+                    <WorkbenchButton
+                      onClick={() => handleRun(c.case_id)}
+                      disabled={loading !== null}
+                      variant="primary"
+                      size="sm"
+                    >
+                      {loading === c.case_id ? "Analyzing..." : "Run Review"}
+                    </WorkbenchButton>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {loading ? (
+            <div style={workbenchStyles.dividerTop}>
+              <WorkbenchNotice tone="primary">
+                Analyzing case — this takes 10–20 seconds...
+              </WorkbenchNotice>
+            </div>
+          ) : null}
+        </WorkbenchPanel>
+      </div>
+    </WorkbenchScreen>
   );
 }

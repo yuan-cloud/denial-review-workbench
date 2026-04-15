@@ -48,6 +48,20 @@ describe("DocumentPanel", () => {
     expect(mark!.textContent).toBe("physical therapy");
   });
 
+  it("falls back to case-insensitive evidence matching", () => {
+    render(
+      <DocumentPanel
+        documents={sampleDocs}
+        retrievedPolicySections={[]}
+        facilityId="fac-1"
+        activeQuote={{ doc_id: "denial-letter", quote: "PHYSICAL THERAPY" }}
+      />
+    );
+    const mark = document.querySelector("mark");
+    expect(mark).not.toBeNull();
+    expect(mark!.textContent).toBe("physical therapy");
+  });
+
   it("shows warning when quote not found", () => {
     render(
       <DocumentPanel

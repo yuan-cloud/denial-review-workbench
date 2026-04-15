@@ -1,4 +1,10 @@
 import type { CaseFacts } from "../types";
+import {
+  WorkbenchButton,
+  WorkbenchField,
+  WorkbenchSectionHeading,
+  workbenchStyles,
+} from "../ui/workbench";
 
 interface Props {
   facts: CaseFacts | null;
@@ -24,57 +30,62 @@ export default function FactCards({ facts, onEvidenceClick }: Props) {
 
   return (
     <div style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Extracted Facts</h2>
+      <WorkbenchSectionHeading
+        title="Extracted Facts"
+        description="Structured outputs from the first model pass."
+        sticky
+      />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+      <div style={{ ...workbenchStyles.cardGrid, marginBottom: 12 }}>
         <Card label="Payer" value={facts.payer} />
         <Card label="Service" value={facts.service_requested} />
         <Card label="Denial Reason" value={facts.denial_reason} />
-        <div style={{
-          padding: "8px 12px",
-          border: "1px solid #e5e7eb",
-          borderRadius: 6,
-          background: confidenceBg(facts.confidence),
-        }}>
-          <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>Confidence</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: confidenceColor(facts.confidence) }}>{pct}</div>
-        </div>
+        <WorkbenchField
+          label="Confidence"
+          style={{ background: confidenceBg(facts.confidence) }}
+        >
+          <div
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              color: confidenceColor(facts.confidence),
+            }}
+          >
+            {pct}
+          </div>
+        </WorkbenchField>
       </div>
 
       {facts.required_documents.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Required Documents</div>
+        <WorkbenchField label="Required Documents" style={{ marginBottom: 12 }}>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
             {facts.required_documents.map((d, i) => (
               <li key={i}>{d}</li>
             ))}
           </ul>
-        </div>
+        </WorkbenchField>
       )}
 
       {facts.evidence_refs.length > 0 && (
         <div>
-          <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Evidence</div>
+          <div style={{ ...workbenchStyles.label, marginBottom: 8 }}>Evidence</div>
           {facts.evidence_refs.map((ref, i) => (
-            <button
+            <WorkbenchButton
               key={i}
               onClick={() => onEvidenceClick(ref.doc_id, ref.quote)}
+              variant="secondary"
+              size="sm"
               style={{
                 display: "block",
                 width: "100%",
                 textAlign: "left",
-                padding: "4px 8px",
                 marginBottom: 4,
-                fontSize: 12,
-                color: "#2563eb",
-                background: "#eff6ff",
-                border: "1px solid #bfdbfe",
-                borderRadius: 4,
-                cursor: "pointer",
+                lineHeight: 1.45,
+                color: "#175cd3",
               }}
             >
               <strong>{ref.doc_id}:</strong> "{ref.quote}"
-            </button>
+            </WorkbenchButton>
           ))}
         </div>
       )}
@@ -83,10 +94,5 @@ export default function FactCards({ facts, onEvidenceClick }: Props) {
 }
 
 function Card({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 6 }}>
-      <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 14 }}>{value}</div>
-    </div>
-  );
+  return <WorkbenchField label={label}>{value}</WorkbenchField>;
 }

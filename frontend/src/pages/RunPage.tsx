@@ -6,6 +6,14 @@ import FactCards from "../components/FactCards";
 import GapAnalysisTable from "../components/GapAnalysisTable";
 import RecommendationEditor from "../components/RecommendationEditor";
 import RunHistoryPanel from "../components/RunHistoryPanel";
+import {
+  WorkbenchButton,
+  WorkbenchNotice,
+  WorkbenchPageHeader,
+  WorkbenchPanel,
+  WorkbenchScreen,
+  WorkbenchStatusPill,
+} from "../ui/workbench";
 
 interface Props {
   caseId: string;
@@ -54,71 +62,99 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
     document.getElementById(`doc-${docId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  const statusTone =
+    run?.status === "approved"
+      ? "success"
+      : run?.status === "escalated"
+        ? "warning"
+        : run
+          ? "primary"
+          : "neutral";
+
+  const statusLabel = run ? run.status.replace(/_/g, " ") : "loading";
+
+  const pageHeader = (
+    <WorkbenchPageHeader
+      eyebrow="Run review"
+      title={`Case: ${caseId}`}
+      description={`Run: ${runId}`}
+      actions={
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <WorkbenchStatusPill tone={statusTone}>{statusLabel}</WorkbenchStatusPill>
+          <WorkbenchButton onClick={onBack} size="sm">
+            &larr; Back
+          </WorkbenchButton>
+        </div>
+      }
+    />
+  );
+
   if (error) {
     return (
-      <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-        <button onClick={onBack} style={{ marginBottom: 16, cursor: "pointer" }}>
-          &larr; Back to cases
-        </button>
-        <div style={{ padding: 12, background: "#fef2f2", color: "#b91c1c", borderRadius: 6 }}>
-          {error}
+      <WorkbenchScreen>
+        <div style={{ display: "grid", gap: 16 }}>
+          {pageHeader}
+          <WorkbenchNotice title="Run request failed" tone="danger">
+            {error}
+          </WorkbenchNotice>
         </div>
-      </div>
+      </WorkbenchScreen>
     );
   }
 
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", height: "100vh", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "8px 16px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", gap: 16 }}>
-        <button onClick={onBack} style={{ cursor: "pointer", background: "none", border: "1px solid #d1d5db", borderRadius: 4, padding: "4px 12px" }}>
-          &larr; Back
-        </button>
-        <span style={{ fontWeight: 600 }}>Case: {caseId}</span>
-        <span style={{ color: "#6b7280", fontSize: 13 }}>Run: {runId}</span>
+    <WorkbenchScreen fullHeight maxWidth={1400}>
+      <div style={{ display: "grid", gap: 16, flex: 1, minHeight: 0 }}>
+        {pageHeader}
+
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: 16,
+          }}
+        >
+          <WorkbenchPanel style={{ minHeight: 0 }}>
+            <DocumentPanel
+              documents={run?.documents ?? []}
+              retrievedPolicySections={run?.retrieved_policy_sections ?? []}
+              facilityId={run?.facility_id ?? ""}
+              activeQuote={activeQuote}
+            />
+          </WorkbenchPanel>
+
+          <WorkbenchPanel style={{ minHeight: 0 }}>
+            {run ? (
+              <>
+                <FactCards facts={run.facts} onEvidenceClick={handleEvidenceClick} />
+                <GapAnalysisTable
+                  facts={run.facts}
+                  findings={run.findings}
+                  onEvidenceClick={handleEvidenceClick}
+                />
+                <RecommendationEditor
+                  recommendation={run.recommendation}
+                  findings={run.findings}
+                  status={run.status}
+                  onApprove={handleApprove}
+                />
+              </>
+            ) : (
+              <WorkbenchNotice>Click Run Review to start.</WorkbenchNotice>
+            )}
+          </WorkbenchPanel>
+
+          <WorkbenchPanel style={{ minHeight: 0 }}>
+            <RunHistoryPanel
+              events={run?.events ?? []}
+              isReplayResponse={run?.is_replay_response ?? false}
+              onReplay={handleReplay}
+            />
+          </WorkbenchPanel>
+        </div>
       </div>
-
-      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 0, overflow: "hidden" }}>
-        {/* Left panel — Documents */}
-        <div style={{ borderRight: "1px solid #e5e7eb", overflow: "auto", padding: 16 }}>
-          <DocumentPanel
-            documents={run?.documents ?? []}
-            retrievedPolicySections={run?.retrieved_policy_sections ?? []}
-            facilityId={run?.facility_id ?? ""}
-            activeQuote={activeQuote}
-          />
-        </div>
-
-        {/* Center panel — Analysis & Recommendation */}
-        <div style={{ borderRight: "1px solid #e5e7eb", overflow: "auto", padding: 16 }}>
-          {run ? (
-            <>
-              <FactCards facts={run.facts} onEvidenceClick={handleEvidenceClick} />
-              <GapAnalysisTable
-                facts={run.facts}
-                findings={run.findings}
-                onEvidenceClick={handleEvidenceClick}
-              />
-              <RecommendationEditor
-                recommendation={run.recommendation}
-                findings={run.findings}
-                status={run.status}
-                onApprove={handleApprove}
-              />
-            </>
-          ) : (
-            <p style={{ color: "#6b7280" }}>Click Run Review to start.</p>
-          )}
-        </div>
-
-        {/* Right panel — Run History */}
-        <div style={{ overflow: "auto", padding: 16 }}>
-          <RunHistoryPanel
-            events={run?.events ?? []}
-            isReplayResponse={run?.is_replay_response ?? false}
-            onReplay={handleReplay}
-          />
-        </div>
-      </div>
-    </div>
+    </WorkbenchScreen>
   );
 }

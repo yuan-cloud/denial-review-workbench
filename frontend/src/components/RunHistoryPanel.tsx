@@ -1,4 +1,12 @@
 import type { RunEvent } from "../types";
+import {
+  WorkbenchActionBar,
+  WorkbenchButton,
+  WorkbenchNotice,
+  WorkbenchSectionHeading,
+  WorkbenchStatusPill,
+  workbenchStyles,
+} from "../ui/workbench";
 
 interface Props {
   events: RunEvent[];
@@ -59,43 +67,33 @@ function eventSummary(event: RunEvent): string | null {
 export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: Props) {
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Run History</h2>
-        {isReplayResponse && (
-          <span
-            style={{
-              display: "inline-block",
-              padding: "2px 10px",
-              background: "#fef3c7",
-              color: "#92400e",
-              fontSize: 11,
-              fontWeight: 700,
-              borderRadius: 9999,
-              letterSpacing: "0.05em",
-            }}
-          >
-            REPLAY
-          </span>
-        )}
-      </div>
+      <WorkbenchSectionHeading
+        title="Run History"
+        description="Append-only event timeline and replay control."
+        sticky
+        badge={
+          isReplayResponse ? (
+            <WorkbenchStatusPill tone="warning">REPLAY</WorkbenchStatusPill>
+          ) : null
+        }
+      />
 
       {events.length === 0 ? (
-        <p style={{ color: "#6b7280", fontSize: 14 }}>
-          No runs yet. Click Run Review to start.
-        </p>
+        <WorkbenchNotice>No runs yet. Click Run Review to start.</WorkbenchNotice>
       ) : (
-        <div>
+        <div style={workbenchStyles.stack}>
           {events.map((event, i) => {
             const summary = eventSummary(event);
             return (
               <div
                 key={i}
                 style={{
-                  display: "flex",
+                  display: "grid",
+                  gridTemplateColumns: "10px minmax(0, 1fr)",
                   gap: 12,
-                  marginBottom: 12,
-                  paddingBottom: 12,
-                  borderBottom: i < events.length - 1 ? "1px solid #f3f4f6" : "none",
+                  padding: "12px 0",
+                  borderBottom:
+                    i < events.length - 1 ? "1px solid #eef2f6" : "none",
                 }}
               >
                 <div
@@ -105,18 +103,17 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
                     borderRadius: "50%",
                     background: event.type === "approved" ? "#16a34a" : "#2563eb",
                     marginTop: 6,
-                    flexShrink: 0,
                   }}
                 />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
                     {EVENT_LABELS[event.type] ?? event.type}
                   </div>
-                  <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                  <div style={{ fontSize: 12, ...workbenchStyles.subtle }}>
                     {formatTimestamp(event.timestamp)}
                   </div>
                   {summary && (
-                    <div style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>
+                    <div style={{ fontSize: 13, ...workbenchStyles.subdued, marginTop: 4 }}>
                       {summary}
                     </div>
                   )}
@@ -127,23 +124,17 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
         </div>
       )}
 
-      <button
-        onClick={onReplay}
-        disabled={events.length === 0}
-        style={{
-          marginTop: 12,
-          padding: "6px 16px",
-          background: events.length === 0 ? "#e5e7eb" : "#f3f4f6",
-          color: events.length === 0 ? "#9ca3af" : "#374151",
-          border: "1px solid #d1d5db",
-          borderRadius: 4,
-          cursor: events.length === 0 ? "not-allowed" : "pointer",
-          fontSize: 13,
-          fontWeight: 500,
-        }}
-      >
-        Replay
-      </button>
+      <div style={workbenchStyles.dividerTop}>
+        <WorkbenchActionBar>
+          <WorkbenchButton
+            onClick={onReplay}
+            disabled={events.length === 0}
+            size="sm"
+          >
+            Replay
+          </WorkbenchButton>
+        </WorkbenchActionBar>
+      </div>
     </div>
   );
 }
