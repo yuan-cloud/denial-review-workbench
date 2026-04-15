@@ -1,0 +1,22 @@
+# bv (beads viewer) local config and caches
+.bv/
+
+# Environment / secrets
+.env
+*.env
+backend/.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+node_modules/
+
+# Frontend build artifacts
+frontend/dist/
+frontend/.vite/
+
+# JSONL run data (generated at runtime)
+data/runs/
