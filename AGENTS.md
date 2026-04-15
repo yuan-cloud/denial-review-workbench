@@ -281,29 +281,11 @@ send_message(
 
 ---
 
-## BEADS TOOLS — br AND bv
-
-This project uses Beads for task tracking.
-
-- `br` (beads_rust) — create, update, manage beads. Administration.
-- `bv` (beads_viewer) — find next work, triage, plan. Work sessions.
-
-**Important:** `br` is non-invasive — it NEVER runs git commands automatically. You must manually commit changes after `br sync --flush-only`.
+## BEADS VIEWER (bv) — triage and planning
 
 **CRITICAL: Use ONLY `--robot-*` flags with bv. Bare `bv` launches an interactive TUI that blocks your session.**
 
-### Essential commands
-
 ```bash
-br ready                                    # find unblocked work (authoritative)
-br list --status=open                       # all open issues
-br show <id>                                # full issue details with dependencies
-br create --title="..." --type=task --priority=2   # create new issue
-br update <id> --status=in_progress         # claim an issue
-br close <id> --reason "Completed"          # close an issue
-br close <id1> <id2>                        # close multiple issues at once
-br sync --flush-only                        # export to JSONL (NO git operations)
-
 bv --robot-triage                           # start here — prioritized triage
 bv --robot-next                             # single top pick with claim command
 bv --robot-plan                             # parallel execution tracks
@@ -311,24 +293,9 @@ bv --robot-insights                         # full graph metrics
 bv --robot-alerts                           # stale issues, blocking cascades
 ```
 
-### Key concepts
+**Important:** `br` is non-invasive — it NEVER runs git commands automatically. You must manually commit changes after `br sync --flush-only`.
 
-- **Dependencies:** Issues can block other issues. `br ready` shows only unblocked work.
-- **Priority:** P0=critical, P1=high, P2=medium, P3=low, P4=backlog (use numbers, not words)
-- **Types:** task, bug, feature, epic, question, docs
-- **Blocking:** `br dep add <child> <parent>` to add dependencies
-
-### Agent workflow
-
-1. `br ready` to find unblocked work.
-2. Claim: `br update <id> --status=in_progress`.
-3. Reserve files in Agent Mail (multi-agent sessions only).
-4. Implement and test.
-5. If you discover new work, create a bead: `br create --title="..." --type=task`.
-6. Close: `br close <id> --reason "Completed"`.
-7. `br sync --flush-only` then commit `.beads/` alongside code.
-
-### Mapping cheat sheet
+### Beads + Agent Mail mapping cheat sheet
 
 | Concept | Value |
 |---------|-------|
@@ -732,3 +699,70 @@ Plan (br) → Coordinate (Agent Mail) → Execute (NTM + Agents) → Remember (C
       --include="*.json" --include="*.md"
   ```
 - [ ] 7-minute demo arc performable without apology
+
+<!-- br-agent-instructions-v1 -->
+
+---
+
+## Beads Workflow Integration
+
+This project uses [beads_rust](https://github.com/Dicklesworthstone/beads_rust) (`br`/`bd`) for issue tracking. Issues are stored in `.beads/` and tracked in git.
+
+### Essential Commands
+
+```bash
+# View ready issues (unblocked, not deferred)
+br ready              # or: bd ready
+
+# List and search
+br list --status=open # All open issues
+br show <id>          # Full issue details with dependencies
+br search "keyword"   # Full-text search
+
+# Create and update
+br create --title="..." --description="..." --type=task --priority=2
+br update <id> --status=in_progress
+br close <id> --reason="Completed"
+br close <id1> <id2>  # Close multiple issues at once
+
+# Sync with git
+br sync --flush-only  # Export DB to JSONL
+br sync --status      # Check sync status
+```
+
+### Workflow Pattern
+
+1. **Start**: Run `br ready` to find actionable work
+2. **Claim**: Use `br update <id> --status=in_progress`
+3. **Work**: Implement the task
+4. **Complete**: Use `br close <id>`
+5. **Sync**: Always run `br sync --flush-only` at session end
+
+### Key Concepts
+
+- **Dependencies**: Issues can block other issues. `br ready` shows only unblocked work.
+- **Priority**: P0=critical, P1=high, P2=medium, P3=low, P4=backlog (use numbers 0-4, not words)
+- **Types**: task, bug, feature, epic, chore, docs, question
+- **Blocking**: `br dep add <issue> <depends-on>` to add dependencies
+
+### Session Protocol
+
+**Before ending any session, run this checklist:**
+
+```bash
+git status              # Check what changed
+git add <files>         # Stage code changes
+br sync --flush-only    # Export beads changes to JSONL
+git commit -m "..."     # Commit everything
+git push                # Push to remote
+```
+
+### Best Practices
+
+- Check `br ready` at session start to find available work
+- Update status as you work (in_progress → closed)
+- Create new issues with `br create` when you discover tasks
+- Use descriptive titles and set appropriate priority/type
+- Always sync before ending session
+
+<!-- end-br-agent-instructions -->
