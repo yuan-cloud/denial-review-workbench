@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getCases, postRun, postApprove, getReplay } from "./api";
+import {
+  ApiError,
+  getCases,
+  getReplay,
+  getRun,
+  postApprove,
+  postRun,
+  resolveApiBase,
+} from "./api";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -12,9 +20,21 @@ function okResponse(data: unknown) {
   return { ok: true, status: 200, json: () => Promise.resolve(data) };
 }
 
-function errorResponse(status: number) {
-  return { ok: false, status, json: () => Promise.resolve({}) };
+function errorResponse(status: number, data: unknown = {}) {
+  return { ok: false, status, json: () => Promise.resolve(data) };
 }
+
+describe("resolveApiBase", () => {
+  it("uses localhost default when value is unset", () => {
+    expect(resolveApiBase()).toBe("http://localhost:8000");
+  });
+
+  it("trims trailing slash from configured base", () => {
+    expect(resolveApiBase("http://example.test/api/")).toBe(
+      "http://example.test/api"
+    );
+  });
+});
 
 describe("getCases", () => {
   it("fetches /cases and returns list", async () => {
@@ -26,9 +46,42 @@ describe("getCases", () => {
     expect(mockFetch).toHaveBeenCalledWith("http://localhost:8000/cases");
   });
 
-  it("throws on non-ok response", async () => {
-    mockFetch.mockResolvedValueOnce(errorResponse(500));
-    await expect(getCases()).rejects.toThrow("GET /cases failed: 500");
+  it("throws ApiError with backend detail when present", async () => {
+    mockFetch.mockResolvedValueOnce(
+      errorResponse(500, { detail: "case list unavailable" })
+    );
+
+    let error: unknown;
+    try {
+      await getCases();
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(ApiError);
+    const apiError = error as ApiError;
+    expect(apiError.status).toBe(500);
+    expect(apiError.detail).toBe("case list unavailable");
+    expect(apiError.path).toBe("/cases");
+    expect(apiError.method).toBe("GET");
+    expect(apiError.message).toBe(
+      "GET /cases failed: 500 (case list unavailable)"
+    );
+  });
+});
+
+describe("getRun", () => {
+  it("fetches /runs/{runId}", async () => {
+    const data = { run_id: "r1", case_id: "case-001", status: "approval_requested" };
+    mockFetch.mockResolvedValueOnce(okResponse(data));
+
+    const result = await getRun("r1");
+    expect(result).toEqual(data);
+    expect(mockFetch).toHaveBeenCalledWith("http://localhost:8000/runs/r1");
+  });
+
+  it("throws on missing run", async () => {
+    mockFetch.mockResolvedValueOnce(errorResponse(404));
+    await expect(getRun("missing")).rejects.toThrow("GET /runs/missing failed: 404");
   });
 });
 
@@ -47,8 +100,10 @@ describe("postRun", () => {
   });
 
   it("throws on non-ok response", async () => {
-    mockFetch.mockResolvedValueOnce(errorResponse(422));
-    await expect(postRun("case-001")).rejects.toThrow("POST /runs failed: 422");
+    mockFetch.mockResolvedValueOnce(errorResponse(422, { detail: "pipeline failed" }));
+    await expect(postRun("case-001")).rejects.toThrow(
+      "POST /runs failed: 422 (pipeline failed)"
+    );
   });
 });
 
@@ -74,8 +129,12 @@ describe("postApprove", () => {
   });
 
   it("throws on 409", async () => {
-    mockFetch.mockResolvedValueOnce(errorResponse(409));
-    await expect(postApprove("r1")).rejects.toThrow("POST /approve failed: 409");
+    mockFetch.mockResolvedValueOnce(
+      errorResponse(409, { detail: "Run already approved" })
+    );
+    await expect(postApprove("r1")).rejects.toThrow(
+      "POST /runs/r1/approve failed: 409 (Run already approved)"
+    );
   });
 });
 
@@ -91,6 +150,8 @@ describe("getReplay", () => {
 
   it("throws on 404", async () => {
     mockFetch.mockResolvedValueOnce(errorResponse(404));
-    await expect(getReplay("missing")).rejects.toThrow("GET /replay failed: 404");
+    await expect(getReplay("missing")).rejects.toThrow(
+      "GET /runs/missing/replay failed: 404"
+    );
   });
 });

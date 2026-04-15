@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import type { RunStatus } from "../types";
-import { postApprove, getReplay } from "../api";
+import { getReplay, getRun, postApprove } from "../api";
 import DocumentPanel from "../components/DocumentPanel";
 import FactCards from "../components/FactCards";
 import GapAnalysisTable from "../components/GapAnalysisTable";
@@ -27,11 +27,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
   const [activeQuote, setActiveQuote] = useState<{ doc_id: string; quote: string } | null>(null);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/runs/${runId}`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`GET /runs/${runId} failed: ${res.status}`);
-        return res.json();
-      })
+    getRun(runId)
       .then(setRun)
       .catch((e) => setError(e.message));
   }, [runId]);
