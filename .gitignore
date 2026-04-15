@@ -17,6 +17,11 @@ node_modules/
 # Frontend build artifacts
 frontend/dist/
 frontend/.vite/
+frontend/tsconfig.tsbuildinfo
 
 # JSONL run data (generated at runtime)
 data/runs/
+
+# Local agent/session artifacts
+.ntm/
+AGENTS.md.bak
