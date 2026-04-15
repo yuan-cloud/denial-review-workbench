@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import state
 from app.errors import PipelineError
-from app.event_store import append_event
+from app.event_store import append_event, read_events
 from app.pipeline import run_pipeline
 from app.replay import replay_run
 from app.schemas import ApproveRequest, RunCreateRequest, RunStatus
@@ -89,6 +89,7 @@ def get_run(run_id: str):
     result = replay_run(run_id)
     if result is None:
         raise HTTPException(status_code=404)
+    result.is_replay_response = False
     return result
 
 
@@ -101,6 +102,8 @@ def post_approve(run_id: str, body: ApproveRequest = None):
         raise HTTPException(status_code=409, detail="Cannot approve an escalated run")
     if state_dict["status"] == "approved":
         raise HTTPException(status_code=409, detail="Run already approved")
+    if any(e.get("type") == "approved" for e in read_events(run_id)):
+        raise HTTPException(status_code=409, detail="Run already approved")
 
     existing = state_dict["recommendation"]
     final_recommendation = {
@@ -110,9 +113,10 @@ def post_approve(run_id: str, body: ApproveRequest = None):
                        else existing["draft_text"]),
     }
 
+    ts = datetime.utcnow().isoformat() + "Z"
     approved_event = {
         "type": "approved",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": ts,
         "payload": {"final_recommendation": final_recommendation},
     }
     state_dict["events"].append(approved_event)
@@ -120,7 +124,8 @@ def post_approve(run_id: str, body: ApproveRequest = None):
     state_dict["recommendation"] = final_recommendation
     state.update(run_id, state_dict)
 
-    append_event(run_id, "approved", {"final_recommendation": final_recommendation})
+    append_event(run_id, "approved", {"final_recommendation": final_recommendation},
+                 timestamp=ts)
 
     result = RunStatus.model_validate(state_dict)
     result.is_replay_response = False

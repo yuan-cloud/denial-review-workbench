@@ -14,11 +14,12 @@ def _run_path(run_id: str) -> Path:
     return DATA_DIR / "runs" / f"{run_id}.jsonl"
 
 
-def append_event(run_id: str, event_type: str, payload: dict) -> None:
+def append_event(run_id: str, event_type: str, payload: dict,
+                 timestamp: str | None = None) -> None:
     """Append a single event to the run's JSONL log."""
     event = {
         "type": event_type,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": timestamp or (datetime.utcnow().isoformat() + "Z"),
         "payload": payload,
     }
     path = _run_path(run_id)
