@@ -2,6 +2,100 @@
 
 This guide synthesizes production-grade best practices for building, testing, and deploying LLM applications with modern RAG (Retrieval-Augmented Generation) architectures. It moves beyond toy examples to provide battle-tested patterns for scalable, cost-effective, and reliable AI systems.
 
+---
+
+## Project-Specific Rules (denial-review-workbench)
+
+> This project's frontend is React 18 + TypeScript + Vite + Bun.
+> No Next.js, no SSR, no React Router. Single-page client-side app.
+> Where this section conflicts with the general guide, these project-specific rules take priority.
+
+### Vite — Lock the Port
+
+```typescript
+// vite.config.ts
+export default defineConfig({
+    server: {
+        port: parseInt(process.env.VITE_PORT || "5274"),
+        strictPort: true,   // exit on conflict, never silently increment
+    },
+    plugins: [react()],
+});
+```
+
+CORS origin in the backend must match. If they differ, every API call fails silently.
+
+### Navigation — View Union, No React Router
+
+```typescript
+type View =
+    | { page: "cases" }
+    | { page: "run"; caseId: string; runId: string };
+```
+
+- `CaseListPage` props: `{ onSelectCase: (caseId: string, runId: string) => void }`
+- `RunPage` props: `{ caseId: string; runId: string; onBack: () => void }`
+- Never install React Router. Never use `window.location`. Never hard reload.
+
+### API Layer — api.ts is Single Source of Truth
+
+```typescript
+const API_BASE = "http://localhost:8000";
+export async function postRun(caseId: string): Promise<RunStatus> { ... }
+export async function postApprove(runId: string, draftText?: string): Promise<RunStatus> { ... }
+export async function getReplay(runId: string): Promise<RunStatus> { ... }
+export async function getCases(): Promise<{ case_id: string }[]> { ... }
+```
+
+Never write `fetch()` inline in components. All API calls go through `api.ts`.
+
+### Null Guards — Required Before Render
+
+`RunStatus.facts`, `findings`, `recommendation` are all nullable. Guard before access.
+
+```typescript
+{run ? (
+    <FactCards facts={run.facts} findings={run.findings} />
+) : (
+    <p>Click Run Review to start.</p>
+)}
+```
+
+### Loading State — Static Spinner
+
+POST /runs blocks for 10-20 seconds. Show a static spinner, not incremental stage labels (no SSE).
+
+### Approved State — Badge Not Button
+
+When `run.status === "approved"`: show "Approved ✓" badge, disable textarea. Never show Approve button again.
+
+### Evidence Ref Highlighting
+
+Two-stage match in DocumentPanel: exact split first, case-insensitive `indexOf` fallback.
+If quote not found (model hallucinated), log to console, show "⚠" tooltip. Never crash.
+
+### Gap Analysis Table
+
+Iterate `facts.required_documents`, check against `findings.missing_items`. Never render `missing_items` alone (drops present items).
+
+### Confidence Color Band
+
+Green ≥80%, yellow 70-79%, red <70%. The 70% threshold matches the backend escalation rule.
+
+### REPLAY Badge
+
+Amber pill in right panel header when `run.is_replay_response` is true.
+
+### Package Management — Bun Only
+
+`bun install`, `bun run dev`, `bun run build`, `bun run typecheck`. Never npm/yarn/pnpm.
+
+### Canonical spec
+
+All details: `docs/PLANS041426.md`
+
+---
+
 ### Prerequisites & Stack Overview
 
 Ensure your project uses **Python 3.12+**, **uv 0.5+** for dependency management, and targets the latest stable releases of core libraries. For frontend tooling, use **Bun** (not npm/yarn) and **Vite** (not webpack) for bundling.

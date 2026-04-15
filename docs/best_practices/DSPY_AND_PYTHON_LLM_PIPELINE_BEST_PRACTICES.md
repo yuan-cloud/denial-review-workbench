@@ -2,6 +2,104 @@
 
 This guide provides production-grade patterns for building scalable, reliable, and cost-effective LLM applications using DSPy. It moves beyond basic tutorials to address the challenges of deploying complex prompt pipelines in production environments.
 
+---
+
+## Project-Specific Rules (denial-review-workbench)
+
+> This project does NOT use DSPy. It uses direct Anthropic API calls via `anthropic_client.py`.
+> The general patterns in this guide (structured output, pipeline stages, error handling) still apply.
+> Where this section conflicts with the general guide, these project-specific rules take priority.
+
+### Pipeline Architecture — Three Calls Maximum
+
+```python
+# pipeline.py — strict call order
+1. extract_facts(documents) → CaseFacts
+2. analyze_gap(facts, policy_sections, documents) → CaseFindings
+3. draft_next_action(findings) → Recommendation   # only if not should_escalate
+```
+
+If `findings.should_escalate` is true, stop after step 2. Never add a fourth call.
+
+### Model Access — Single Entry Point
+
+All model calls go through `call_model(system, user)` in `anthropic_client.py`.
+`pipeline.py` never imports the Anthropic SDK directly (OCP — swap providers by rewriting only `call_model`).
+
+```python
+# anthropic_client.py
+import anthropic
+from app.errors import PipelineError
+
+client = anthropic.Anthropic(timeout=30.0)
+
+def call_model(system: str, user: str) -> str:
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=2048,
+        system=system,
+        messages=[{"role": "user", "content": user}],
+    )
+    return response.content[0].text
+```
+
+### JSONL Event Store — Append-Only Audit Trail
+
+One JSON object per line. Append only. Never rewrite or delete lines.
+
+```python
+# event_store.py
+def append_event(run_id: str, event_type: str, payload: dict) -> None:
+    run_path = DATA_DIR / "runs" / f"{run_id}.jsonl"
+    event = {"type": event_type, "timestamp": now_utc(), "payload": payload}
+    with open(run_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(event) + "\n")
+```
+
+- Directory creation at module level: `(DATA_DIR / "runs").mkdir(parents=True, exist_ok=True)`
+- Event payloads carry FULL objects (e.g., `facts.model_dump()`), never partial
+- `is_replay_response` is response metadata only — never persisted to JSONL
+- Read pattern: skip malformed lines with `logger.warning`, never crash
+
+### JSON Parse Hardening
+
+Strip markdown fences before `json.loads()`. Wrap in try/except. Raise `PipelineError` on failure.
+
+```python
+def parse_json_response(raw: str, stage: str) -> dict:
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return json.loads(raw.strip())  # wrapped in try/except PipelineError
+```
+
+### VERBATIM_QUOTE_RULE — DRY Constant
+
+```python
+VERBATIM_QUOTE_RULE = (
+    "Each evidence_refs quote must be a verbatim substring from the "
+    "provided documents. Do not paraphrase or invent quotes."
+)
+```
+
+Shared across `EXTRACT_FACTS_SYSTEM` and `ANALYZE_GAP_SYSTEM` prompts via f-string.
+
+### PipelineError lives in errors.py (not pipeline.py)
+
+Avoids circular imports — both `pipeline.py` and `anthropic_client.py` import from `errors.py`.
+
+### Replay is Read-Only
+
+`replay.py` reconstructs `RunStatus` from JSONL events. It never calls model providers, never writes files, never produces side effects.
+
+### Canonical spec
+
+All details: `docs/PLANS041426.md`
+
+---
+
 ## Prerequisites & Modern Python Setup
 
 Ensure your project uses **Python 3.12+**, **DSPy 2.x**, and **uv** for dependency management (NOT pip/poetry/conda!). DSPy 2.x provides `dspy.Predict`, `dspy.ChainOfThought`, `dspy.Module`, docstring-based signatures, and `dspy.configure()` for global settings.

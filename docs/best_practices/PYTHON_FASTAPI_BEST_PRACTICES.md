@@ -1,5 +1,131 @@
 Python FastAPI Best Practices for Web Apps (mid-2025 Edition by Jeffrey Emanuel)
 
+---
+
+## Project-Specific Rules (denial-review-workbench)
+
+> This project uses FastAPI + Pydantic v2 + uvicorn (single worker). No Postgres, no SQLModel, no async.
+> Storage is JSONL append-only. In-memory state via `state.py` (Phase 1).
+> Where this section conflicts with the general guide, these project-specific rules take priority.
+
+### Stack Differences from Jeff's Guide
+
+| Jeff's guide says | This project uses instead |
+|---|---|
+| PostgreSQL + SQLModel + Alembic | JSONL event store (`data/runs/`) |
+| Async everywhere | Sync (single-worker uvicorn) |
+| Redis for caching | In-memory dict via `state.py` |
+| python-decouple | `os.environ.get()` with defaults |
+| uv + Python 3.13 | Python 3.11+, any venv |
+| Rich console output | `logging` module only |
+
+### Path Resolution — CRITICAL
+
+Every backend file that touches the filesystem must resolve paths from `__file__`:
+
+```python
+from pathlib import Path
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = REPO_ROOT / "data"
+```
+
+uvicorn runs from `backend/`, so bare `"data/..."` resolves to `backend/data/...` (wrong).
+
+### Pydantic v2 — Correct Patterns
+
+```python
+# Construction from dicts (e.g., json.load output)
+result = RunStatus.model_validate(state_dict)      # ✅ not RunStatus(**state_dict)
+
+# Serialization
+payload = json.dumps(facts.model_dump())            # ✅ not facts.dict()
+
+# Immutable update (is_replay_response after construction)
+result = result.model_copy(update={"is_replay_response": True})
+
+# Never pass Pydantic objects to json.dumps() — raises TypeError
+json.dumps(facts)           # ❌ TypeError
+json.dumps(facts.model_dump())  # ✅
+```
+
+### Literal Types for Fixed Values
+
+```python
+from typing import Literal
+
+class CaseDocument(BaseModel):
+    type: Literal["denial_letter", "auth_request", "clinical_notes"]
+
+class RunStatus(BaseModel):
+    status: Literal["approval_requested", "approved", "escalated"]
+```
+
+### FastAPI Lifespan — Not @app.on_event
+
+```python
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # seed in-memory state from mock_run.json files
+    for case_id in ["case-001", "case-002", "case-003"]:
+        mock_path = DATA_DIR / "cases" / case_id / "mock_run.json"
+        if mock_path.exists():
+            with open(mock_path) as f:
+                state.seed(json.load(f)["run_id"], json.load(f))
+    yield
+
+app = FastAPI(lifespan=lifespan)   # never bare FastAPI()
+```
+
+### Route Status Codes
+
+```python
+@app.post("/runs", status_code=201)   # explicit 201, not default 200
+```
+
+### Server Guards on Approve (409s)
+
+```python
+if state_dict["status"] == "escalated":
+    raise HTTPException(status_code=409, detail="Cannot approve an escalated run")
+if state_dict["status"] == "approved":
+    raise HTTPException(status_code=409, detail="Run already approved")
+```
+
+### PipelineError — Central Exception Handler
+
+`PipelineError` lives in `errors.py`. `main.py` catches it and returns 422.
+
+```python
+@app.exception_handler(PipelineError)
+async def pipeline_error_handler(request, exc):
+    return JSONResponse(status_code=422, content={"error": "pipeline_failed", "stage": exc.stage})
+```
+
+### Import Discipline
+
+- `from app import state` (module-level, never individual functions)
+- `from app.errors import PipelineError` (both pipeline.py and anthropic_client.py)
+- `from app.providers.anthropic_client import call_model` (pipeline.py only import)
+
+### Single-Worker Constraint
+
+`run_states` is a plain dict. Not thread-safe. Never `--workers 4`.
+
+### Structured Logging — No print()
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+```
+
+### Canonical spec
+
+All details: `docs/PLANS041426.md`
+
+---
+
 * uv and a venv targeting only python 3.13 and higher (NOT pip/poetry/conda!); key commands to use for this are:
 	- uv venv --python 3.13
 	- uv lock --upgrade
