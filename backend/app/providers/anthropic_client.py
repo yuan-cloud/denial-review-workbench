@@ -16,12 +16,12 @@ client = anthropic.Anthropic(timeout=30.0) if anthropic is not None else None
 def call_model(system: str, user: str) -> str:
     if client is None:
         error = ImportError("anthropic package is not installed")
-        logger.error("anthropic SDK unavailable: %s", error)
+        logger.error("anthropic SDK unavailable: %s", error, exc_info=True)
         raise PipelineError(stage="call_model", raw_response="", cause=error) from error
 
     if anthropic is None:
         error = RuntimeError("anthropic SDK import unexpectedly unavailable")
-        logger.error("anthropic SDK unavailable after client init: %s", error)
+        logger.error("anthropic SDK unavailable after client init: %s", error, exc_info=True)
         raise PipelineError(stage="call_model", raw_response="", cause=error) from error
 
     try:
@@ -37,7 +37,10 @@ def call_model(system: str, user: str) -> str:
         anthropic.RateLimitError,
         anthropic.APIError,
     ) as error:
-        logger.error("anthropic model call failed: %s", error)
+        logger.error("anthropic model call failed: %s", error, exc_info=True)
+        raise PipelineError(stage="call_model", raw_response="", cause=error) from error
+    except Exception as error:
+        logger.error("anthropic model call failed unexpectedly: %s", error, exc_info=True)
         raise PipelineError(stage="call_model", raw_response="", cause=error) from error
 
     if not response.content or response.content[0].type != "text":
