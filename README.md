@@ -8,7 +8,7 @@
 
 Denial Review Workbench is a thin, operator-ready workflow tool for reviewing insurance authorization denials. It ingests a case packet — denial letter, auth request, clinical notes — runs a structured AI pipeline to extract facts, identify missing documentation, and draft a next action, then routes the result to a human reviewer for approval or escalation. Every decision is logged to an append-only JSONL event store and can be replayed deterministically without touching the model.
 
-Built as a 48-hour sprint prototype demonstrating production-grade agentic workflow architecture: structured evidence extraction, policy-grounded gap analysis, auditable approval chain, and read-only replay.
+Processes insurance denial case packets through a three-step review pipeline and produces a human-approved action with a replayable audit trail.
 
 ---
 
@@ -174,15 +174,15 @@ Policy files live in `data/policies/`. Swapping policy packs and approval rules 
 
 ---
 
-## Demo Fallback
+## Troubleshooting
 
-If anything breaks during a live demo:
+If a run fails, use the case-002 fallback endpoint:
 
 ```
 GET /demo-fallback/case-002
 ```
 
-Returns the saved mock run from `data/cases/case-002/saved_demo_run.json`. Continue the demo from the Recommendation or Run History panel.
+Returns the saved mock run for case-002 so you can inspect the Recommendation or Run History panel state.
 
 ---
 
@@ -202,7 +202,6 @@ One thin, legible, operator-ready workflow artifact. One flow. One knife.
 
 Built using the [Agent Flywheel](https://agent-flywheel.com) multi-agent development environment: NTM for agent orchestration, Agent Mail for coordination, Beads for task tracking, CASS for session search, and named Claude Code + Codex agents working in parallel from a shared AGENTS.md operating contract on a Contabo VPS.
 
-The build demonstrates that a production-grade agentic workflow with full audit trail, human-in-the-loop approval, and deterministic replay can be specified, scaffolded, and verified in a 48-hour sprint when the agent operating environment is right.
 
 ---
 

@@ -422,7 +422,7 @@ type View =
 `CaseListPage` receives `onSelectCase: (caseId: string, runId: string) => void`.
 `RunPage` receives `caseId`, `runId`, and `onBack: () => void`.
 
-Do not install React Router. No URL routing is needed for this demo arc.
+Do not install React Router; v1 is a single-view SPA, navigation is tab-switching rather than URL routing, all state lives in React, and there is no shareable URL surface.
 
 ---
 

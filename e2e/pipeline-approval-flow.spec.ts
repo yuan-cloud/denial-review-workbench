@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.use({ viewport: { width: 1280, height: 800 } });
 
-test.describe("Full demo arc", () => {
+test.describe("Pipeline: full approval flow", () => {
   test("case list → run review → evidence → approve → replay", async ({
     page,
   }) => {
