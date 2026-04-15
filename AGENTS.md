@@ -257,6 +257,8 @@ Recommended reservation patterns:
 "docs/**"                          # spec and plan
 ```
 
+Collision prevention rule: If `file_reservation_paths()` returns `FILE_RESERVATION_CONFLICT`, stop immediately. Do not edit the file. Run `br ready` to find a different unblocked bead and work on that instead. Never force-edit a reserved file. The reservation system only works if every agent respects it without exception.
+
 ### Communication
 
 ```python
