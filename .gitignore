@@ -25,3 +25,6 @@ data/runs/
 # Local agent/session artifacts
 .ntm/
 AGENTS.md.bak
+
+# Playwright screenshot run metadata
+docs/screenshots/.last-run.json
