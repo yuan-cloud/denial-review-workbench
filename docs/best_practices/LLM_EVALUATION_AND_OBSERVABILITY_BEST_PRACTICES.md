@@ -2,6 +2,80 @@
 
 This guide synthesizes production-grade patterns for building, evaluating, and monitoring LLM applications using **Langfuse 2.12+**, **Arize Phoenix 8.0+**, and **RAGAS 0.2+**. It moves beyond toy examples to provide battle-tested architectures for teams shipping LLM features at scale.
 
+---
+
+## Project-Specific Rules (denial-review-workbench)
+
+> This project does not use Langfuse, Phoenix, or RAGAS. Observability is built on
+> a JSONL append-only event log and a `/health` phase-gate endpoint.
+> Where this section conflicts with the general guide, these project-specific rules take priority.
+
+### JSONL Event Log is the Audit Trail
+
+Every pipeline stage appends a full event with a complete payload to `data/runs/{run_id}.jsonl`.
+Truncated payloads produce truncated replay UI — always persist full objects via `model_dump()`.
+
+```python
+append_event(run_id, "facts_extracted", {"facts": facts.model_dump()})   # full object
+```
+
+### is_replay_response is Response Metadata Only
+
+`is_replay_response` signals to the frontend that this `RunStatus` came from read-only
+reconstruction, not a live pipeline run. It must **never** be written to the JSONL log.
+
+```python
+# ✅ Set on the response object only
+result = result.model_copy(update={"is_replay_response": True})
+
+# ❌ Never persist
+append_event(run_id, "is_replay_response", {"value": True})   # wrong
+```
+
+### REPLAY Badge — Visible Observability
+
+The right panel shows an amber pill badge reading "REPLAY" when `run.is_replay_response`
+is true. This makes the "read-only reconstruction, no model call" property visible to
+operators and interviewers without narration. The badge disappears on non-replay responses.
+
+### /health — Minimum Viable Observability Endpoint
+
+```
+GET /health → {"status": "ok", "phase": "1"}
+```
+
+Update the phase value as each gate is passed:
+- Phase 1 (mock demo arc works): `"phase": "1"`
+- Phase 2 (live pipeline works): `"phase": "2"`
+- Phase 3 (replay from JSONL): `"phase": "3"`
+
+This is the smoke-test endpoint: if `curl /health` returns JSON, the server is up.
+
+### approved Event — Primary Audit Artifact
+
+The `approved` event carries `final_recommendation` — the human-reviewed, potentially
+edited version of the draft. This is the evidence of what the human actually signed off on.
+`draft_text` must never be null; if the reviewer approves without editing, fall back to
+the existing draft value. Replay reads this field to render the terminal decision.
+
+### replay.py is Read-Only — Enforce Strictly
+
+This comment must appear verbatim in `replay.py` and never be removed:
+
+```python
+# Replay is read-only reconstruction from persisted events.
+# It must never call model providers or produce new side effects.
+```
+
+Never call `pipeline.py` or `anthropic_client.py` from `replay.py`.
+Never write any new events or files from `replay.py`.
+
+### Canonical spec
+
+All details: `docs/PLANS041426.md`
+
+---
+
 ### Prerequisites & Core Stack
 - **Python 3.12+** (3.13 for free-threaded experiments)
 - **Langfuse 2.12+** for production observability
