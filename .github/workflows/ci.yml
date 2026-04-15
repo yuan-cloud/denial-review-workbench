@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-unit:
+    name: Backend pytest (unit + routes)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r ../requirements.txt
+      - run: python -m pytest tests/ -v --ignore=tests/test_integration.py
+
+  frontend-unit:
+    name: Frontend vitest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bun run test
+
+  integration:
+    name: Live integration (httpx)
+    runs-on: ubuntu-latest
+    if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    needs: [backend-unit]
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r ../requirements.txt
+      - name: Start backend
+        run: |
+          nohup uvicorn app.main:app --port 8000 &
+          sleep 3
+          curl -sf http://localhost:8000/health
+      - run: python -m pytest tests/test_integration.py -v
+
+  playwright:
+    name: Playwright e2e
+    runs-on: ubuntu-latest
+    if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    needs: [backend-unit, frontend-unit]
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: oven-sh/setup-bun@v2
+      - run: pip install -r requirements.txt
+      - run: cd frontend && bun install
+      - run: npx playwright install --with-deps chromium
+      - name: Start backend
+        run: |
+          cd backend && nohup uvicorn app.main:app --port 8000 &
+          sleep 3
+          curl -sf http://localhost:8000/health
+      - name: Start frontend
+        run: |
+          cd frontend && nohup bun run dev &
+          sleep 3
+          curl -sf http://localhost:5274/
+      - run: npx playwright test --reporter=list
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: docs/screenshots/
+
+  security-grep:
+    name: Security grep (PHI leak check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for PHI patterns
+        run: |
+          if grep -r "PHI\|patient_name\|ssn\|date_of_birth" \
+            data/ backend/ frontend/src/ \
+            --include="*.py" --include="*.tsx" --include="*.json" --include="*.md" ; then
+            echo "::error::PHI patterns detected in source files"
+            exit 1
+          fi
+          echo "No PHI patterns found — clean."

@@ -28,14 +28,35 @@ case-003 demonstrates the escalation branch: conflicting denial reasons trigger 
 
 ## Screenshots
 
-| Panel | Description |
-|-------|-------------|
-| **Case List** | Three synthetic cases with distinct paths: happy path, missing docs, escalation |
-| **Left Panel** | Denial letter, auth request, clinical notes, policy excerpt, policy pack label |
-| **Fact Cards** | Extracted payer, service, denial reason, confidence band, clickable evidence refs |
-| **Gap Analysis** | Requirement / Present or Missing / Evidence — rendered from `required_documents`, not `missing_items` |
-| **Recommendation** | Editable draft text, Approve button, escalation notice branch |
-| **Run History** | Event timeline with REPLAY badge on reconstruction |
+### Case List
+Three synthetic cases with distinct review paths: happy path, missing docs, escalation.
+
+![Case List](docs/screenshots/01-case-list.png)
+
+### Run Results — Three-Panel Layout
+Left: denial letter, auth request, clinical notes, policy excerpt. Center: extracted facts, gap analysis, editable recommendation. Right: event timeline.
+
+![Run Results](docs/screenshots/02-run-results.png)
+
+### Evidence Highlight
+Clicking an evidence reference highlights the source quote in the document panel.
+
+![Evidence Highlight](docs/screenshots/03-evidence-highlight.png)
+
+### After Approve
+Reviewer edits draft text and clicks Approve. Badge confirms `approved` status; textarea is locked.
+
+![After Approve](docs/screenshots/04-after-approve.png)
+
+### Replay
+Deterministic reconstruction from JSONL log — no model call. Amber REPLAY badge confirms read-only state.
+
+![Replay](docs/screenshots/05-replay.png)
+
+### Escalation (case-003)
+Conflicting denial reasons trigger escalation. Draft and Approve UI suppressed; escalation notice shown.
+
+![Escalation](docs/screenshots/06-escalation.png)
 
 ---
 
