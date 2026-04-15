@@ -37,15 +37,13 @@ class TestCasesEndpoint:
 
 class TestGetRunEndpoint:
     def test_get_run_returns_seeded_data(self, seeded_client):
-        resp = seeded_client.get("/cases")
-        # The seeded client loads mock_run.json for each case. Grab a known run_id.
-        # mock_run.json run_ids follow a pattern — let's query state directly.
-        # Instead, use a run_id we know from the mock data
-        resp2 = seeded_client.get("/runs/mock-run-case-002")
-        if resp2.status_code == 200:
-            data = resp2.json()
-            assert "run_id" in data
-            assert "status" in data
+        # mock_run.json uses run_id "run-case-002-mock"
+        resp = seeded_client.get("/runs/run-case-002-mock")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["run_id"] == "run-case-002-mock"
+        assert data["case_id"] == "case-002"
+        assert data["status"] in ("approval_requested", "approved", "escalated")
 
     def test_get_run_not_found(self, client):
         resp = client.get("/runs/nonexistent-run-id")
@@ -189,8 +187,11 @@ class TestDemoFallbackEndpoint:
 class TestLifespan:
     def test_seeded_client_populates_state(self, seeded_client):
         """The lifespan should seed mock run data for all known cases."""
-        resp = seeded_client.get("/health")
-        assert resp.status_code == 200
-        # At least one mock run should be accessible
-        # We know case-002 has mock_run.json — check by iterating known patterns
-        # The mock run_id format is "mock-run-{case_id}" based on the mock_run.json files
+        # Verify all three mock runs are accessible via GET /runs/{run_id}
+        for case_num in ("001", "002", "003"):
+            run_id = f"run-case-{case_num}-mock"
+            resp = seeded_client.get(f"/runs/{run_id}")
+            assert resp.status_code == 200, f"Seeded run {run_id} not found"
+            data = resp.json()
+            assert data["run_id"] == run_id
+            assert data["case_id"] == f"case-{case_num}"
