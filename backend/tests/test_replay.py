@@ -1,7 +1,20 @@
 """Tests for app.replay — read-only JSONL reconstruction."""
 
-from app.event_store import append_event
+import json
+from pathlib import Path
+
+from app.event_store import append_event, read_events
 from app.replay import replay_run, resolve_status
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = REPO_ROOT / "data"
+
+
+def _load_mock_run(case_id: str) -> dict:
+    """Load real mock_run.json from data/cases/."""
+    path = DATA_DIR / "cases" / case_id / "mock_run.json"
+    with open(path) as f:
+        return json.load(f)
 
 
 def test_replay_returns_none_for_missing(tmp_runs):
@@ -118,3 +131,64 @@ def test_resolve_status_approved():
 
 def test_resolve_status_default():
     assert resolve_status({"findings": {"should_escalate": False}}) == "approval_requested"
+
+
+class TestIsReplayResponseAbsentFromJSONL:
+    """bd-22t: is_replay_response must never be persisted to the JSONL event log."""
+
+    def test_pipeline_events_never_contain_is_replay_response(self, tmp_runs):
+        """Write real case-002 events to JSONL, replay, then verify the field is absent."""
+        mock = _load_mock_run("case-002")
+        run_id = mock["run_id"]
+
+        # Write every event from the real mock_run.json via append_event
+        for event in mock["events"]:
+            append_event(run_id, event["type"], event["payload"])
+
+        # Replay — sets is_replay_response=True on the returned RunStatus
+        result = replay_run(run_id)
+        assert result is not None
+        assert result.is_replay_response is True
+
+        # Read raw JSONL and assert is_replay_response never appears in any line
+        jsonl_path = tmp_runs / f"{run_id}.jsonl"
+        assert jsonl_path.exists()
+        for i, line in enumerate(jsonl_path.read_text().splitlines()):
+            if not line.strip():
+                continue
+            parsed = json.loads(line)
+            assert "is_replay_response" not in parsed, (
+                f"JSONL line {i} contains is_replay_response: {line[:120]}"
+            )
+            assert "is_replay_response" not in json.dumps(parsed["payload"]), (
+                f"JSONL line {i} payload contains is_replay_response"
+            )
+
+    def test_approved_event_never_contains_is_replay_response(self, tmp_runs):
+        """After appending an approved event (as the approve route does), JSONL stays clean."""
+        mock = _load_mock_run("case-002")
+        run_id = mock["run_id"]
+
+        # Write pipeline events
+        for event in mock["events"]:
+            append_event(run_id, event["type"], event["payload"])
+
+        # Simulate what the approve route writes (main.py:123)
+        final_recommendation = {
+            "action_type": mock["recommendation"]["action_type"],
+            "rationale": mock["recommendation"]["rationale"],
+            "draft_text": "Reviewer-approved text.",
+        }
+        append_event(run_id, "approved", {"final_recommendation": final_recommendation})
+
+        # Replay the approved run
+        result = replay_run(run_id)
+        assert result.status == "approved"
+        assert result.is_replay_response is True
+
+        # Every JSONL line must be free of is_replay_response
+        jsonl_path = tmp_runs / f"{run_id}.jsonl"
+        raw = jsonl_path.read_text()
+        assert "is_replay_response" not in raw, (
+            "is_replay_response found in raw JSONL content"
+        )

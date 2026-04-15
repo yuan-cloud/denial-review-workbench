@@ -1,12 +1,25 @@
 """Tests for API routes in app.main — FastAPI TestClient coverage."""
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from app import state
+from app.event_store import append_event
+from app.replay import replay_run
 from app.schemas import RunStatus
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = REPO_ROOT / "data"
+
+
+def _load_mock_run(case_id: str) -> dict:
+    """Load real mock_run.json from data/cases/."""
+    path = DATA_DIR / "cases" / case_id / "mock_run.json"
+    with open(path) as f:
+        return json.load(f)
 
 
 class TestHealthEndpoint:
@@ -195,3 +208,78 @@ class TestLifespan:
             data = resp.json()
             assert data["run_id"] == run_id
             assert data["case_id"] == f"case-{case_num}"
+
+
+class TestApproveReplayRoundTrip:
+    """bd-2mu: approve via route → JSONL written → replay from JSONL → status stays approved."""
+
+    def test_approve_then_replay_from_jsonl(self, seeded_client, tmp_runs):
+        """Full round-trip using real case-002 mock data, real JSONL, real replay."""
+        mock = _load_mock_run("case-002")
+        run_id = mock["run_id"]
+
+        # Pre-populate JSONL with the real pipeline events from mock_run.json
+        # so replay_run() has a complete event history to reconstruct from.
+        for event in mock["events"]:
+            append_event(run_id, event["type"], event["payload"])
+
+        # Verify JSONL has the pipeline events before approve
+        jsonl_path = tmp_runs / f"{run_id}.jsonl"
+        assert jsonl_path.exists()
+        lines_before = [l for l in jsonl_path.read_text().splitlines() if l.strip()]
+        assert len(lines_before) == len(mock["events"])
+
+        # Approve via the route — this appends an "approved" event to JSONL
+        resp = seeded_client.post(
+            f"/runs/{run_id}/approve",
+            json={"draft_text": "Round-trip test approved."},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "approved"
+
+        # Verify the approved event was appended to JSONL
+        lines_after = [l for l in jsonl_path.read_text().splitlines() if l.strip()]
+        assert len(lines_after) == len(lines_before) + 1
+        last_event = json.loads(lines_after[-1])
+        assert last_event["type"] == "approved"
+        assert last_event["payload"]["final_recommendation"]["draft_text"] == "Round-trip test approved."
+
+        # Replay via the route — should reconstruct the full approved state from JSONL
+        resp = seeded_client.get(f"/runs/{run_id}/replay")
+        assert resp.status_code == 200
+        replayed = RunStatus.model_validate(resp.json())
+        assert replayed.status == "approved"
+        assert replayed.is_replay_response is True
+        assert replayed.recommendation is not None
+        assert replayed.recommendation.draft_text == "Round-trip test approved."
+
+        # Verify replayed run preserves key facts from the original
+        assert replayed.case_id == "case-002"
+        assert replayed.facility_id == "facility-a"
+        assert replayed.facts is not None
+        assert replayed.facts.payer == "Example Health Plan"
+
+    def test_replay_preserves_approved_status_not_downgrade(self, seeded_client, tmp_runs):
+        """An approved run replayed must stay approved — never revert to approval_requested."""
+        mock = _load_mock_run("case-002")
+        run_id = mock["run_id"]
+
+        # Write pipeline events + approved event to JSONL
+        for event in mock["events"]:
+            append_event(run_id, event["type"], event["payload"])
+        append_event(run_id, "approved", {
+            "final_recommendation": {
+                "action_type": mock["recommendation"]["action_type"],
+                "rationale": mock["recommendation"]["rationale"],
+                "draft_text": "Approved by reviewer.",
+            },
+        })
+
+        # Replay must yield approved, not approval_requested
+        replayed = replay_run(run_id)
+        assert replayed.status == "approved", (
+            f"Expected 'approved' but got '{replayed.status}' — "
+            "replay must not downgrade approved runs"
+        )
+        assert replayed.is_replay_response is True
+        assert replayed.recommendation.draft_text == "Approved by reviewer."
