@@ -1,0 +1,166 @@
+{
+  "run_id": "run-case-002-mock",
+  "case_id": "case-002",
+  "facility_id": "facility-a",
+  "status": "approval_requested",
+  "is_replay_response": false,
+  "documents": [
+    {
+      "doc_id": "denial-letter",
+      "type": "denial_letter",
+      "text": "Authorization denied due to insufficient supporting documentation. Required: signed physician order and progress notes within 30 days. Please resubmit with complete documentation."
+    },
+    {
+      "doc_id": "auth-request",
+      "type": "auth_request",
+      "text": "Requesting approval for skilled nursing follow-up visit. Patient requires skilled nursing support for ongoing care needs. Service requested: skilled nursing follow-up. Payer: Example Health Plan."
+    },
+    {
+      "doc_id": "notes",
+      "type": "clinical_notes",
+      "text": "Follow-up visit recommended by care team. No signed physician order on file as of submission date. Progress notes last updated 02/10/2026, outside 30-day window."
+    }
+  ],
+  "retrieved_policy_sections": [
+    "Required documentation for authorization: Signed physician order within 30 days of service. Progress notes within 30 days of service.",
+    "Denial appeal basis: Missing documents: request specific missing items, then resubmit."
+  ],
+  "facts": {
+    "payer": "Example Health Plan",
+    "service_requested": "Skilled nursing follow-up",
+    "denial_reason": "Insufficient documentation",
+    "required_documents": [
+      "signed physician order within 30 days",
+      "progress notes within 30 days"
+    ],
+    "confidence": 0.86,
+    "evidence_refs": [
+      {
+        "doc_id": "denial-letter",
+        "quote": "Authorization denied due to insufficient supporting documentation."
+      }
+    ]
+  },
+  "findings": {
+    "missing_items": [
+      "signed physician order within 30 days",
+      "progress notes within 30 days"
+    ],
+    "conflicts": [],
+    "appeal_basis": null,
+    "should_escalate": false,
+    "evidence_refs": [
+      {
+        "doc_id": "notes",
+        "quote": "No signed physician order on file as of submission date."
+      },
+      {
+        "doc_id": "notes",
+        "quote": "Progress notes last updated 02/10/2026, outside 30-day window."
+      }
+    ]
+  },
+  "recommendation": {
+    "action_type": "request_missing_documents",
+    "rationale": "The denial is likely to stand until the missing documentation is supplied. Filing an appeal without the physician order and recent progress notes would be premature.",
+    "draft_text": "Please provide the signed physician order and the most recent progress notes dated within 30 days so we can resubmit the authorization request."
+  },
+  "events": [
+    {
+      "type": "run_started",
+      "timestamp": "2026-04-11T15:00:00Z",
+      "payload": {
+        "run_id": "run-case-002-mock",
+        "case_id": "case-002",
+        "facility_id": "facility-a"
+      }
+    },
+    {
+      "type": "documents_loaded",
+      "timestamp": "2026-04-11T15:00:01Z",
+      "payload": {
+        "documents": [
+          {"doc_id": "denial-letter", "type": "denial_letter",
+           "text": "Authorization denied due to insufficient supporting documentation. Required: signed physician order and progress notes within 30 days."},
+          {"doc_id": "auth-request", "type": "auth_request",
+           "text": "Requesting approval for skilled nursing follow-up visit. Patient requires skilled nursing support for ongoing care needs."},
+          {"doc_id": "notes", "type": "clinical_notes",
+           "text": "No signed physician order on file as of submission date. Progress notes last updated 02/10/2026, outside 30-day window."}
+        ]
+      }
+    },
+    {
+      "type": "facts_extracted",
+      "timestamp": "2026-04-11T15:00:02Z",
+      "payload": {
+        "facts": {
+          "payer": "Example Health Plan",
+          "service_requested": "Skilled nursing follow-up",
+          "denial_reason": "Insufficient documentation",
+          "required_documents": [
+            "signed physician order within 30 days",
+            "progress notes within 30 days"
+          ],
+          "confidence": 0.86,
+          "evidence_refs": [
+            {
+              "doc_id": "denial-letter",
+              "quote": "Authorization denied due to insufficient supporting documentation."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "policy_retrieved",
+      "timestamp": "2026-04-11T15:00:03Z",
+      "payload": {
+        "retrieved_policy_sections": [
+          "Required documentation for authorization: Signed physician order within 30 days of service. Progress notes within 30 days of service.",
+          "Denial appeal basis: Missing documents: request specific missing items, then resubmit."
+        ]
+      }
+    },
+    {
+      "type": "analysis_completed",
+      "timestamp": "2026-04-11T15:00:05Z",
+      "payload": {
+        "findings": {
+          "missing_items": [
+            "signed physician order within 30 days",
+            "progress notes within 30 days"
+          ],
+          "conflicts": [],
+          "appeal_basis": null,
+          "should_escalate": false,
+          "evidence_refs": [
+            {
+              "doc_id": "notes",
+              "quote": "No signed physician order on file as of submission date."
+            },
+            {
+              "doc_id": "notes",
+              "quote": "Progress notes last updated 02/10/2026, outside 30-day window."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "draft_generated",
+      "timestamp": "2026-04-11T15:00:07Z",
+      "payload": {
+        "recommendation": {
+          "action_type": "request_missing_documents",
+          "rationale": "The denial is likely to stand until the missing documentation is supplied.",
+          "draft_text": "Please provide the signed physician order and the most recent progress notes dated within 30 days so we can resubmit the authorization request."
+        }
+      }
+    },
+    {
+      "type": "approval_requested",
+      "timestamp": "2026-04-11T15:00:08Z",
+      "payload": {}
+    }
+  ]
+}

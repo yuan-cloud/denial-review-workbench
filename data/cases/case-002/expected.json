@@ -1,0 +1,10 @@
+{
+  "expected_action_type": "request_missing_documents",
+  "expected_missing_items": [
+    "signed physician order within 30 days",
+    "progress notes within 30 days"
+  ],
+  "expected_should_escalate": false,
+  "expected_confidence_min": 0.75,
+  "expected_evidence_doc_ids": ["denial-letter", "notes"]
+}

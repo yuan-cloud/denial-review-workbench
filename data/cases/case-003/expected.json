@@ -1,0 +1,6 @@
+{
+  "expected_should_escalate": true,
+  "expected_missing_items": ["functional assessment within 60 days"],
+  "expected_recommendation_present": false,
+  "expected_evidence_doc_ids": ["denial-letter", "notes"]
+}

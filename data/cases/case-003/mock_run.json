@@ -1,0 +1,134 @@
+{
+  "run_id": "run-case-003-mock",
+  "case_id": "case-003",
+  "facility_id": "facility-a",
+  "status": "escalated",
+  "is_replay_response": false,
+  "documents": [
+    {
+      "doc_id": "denial-letter",
+      "type": "denial_letter",
+      "text": "Claim denied for two stated reasons: service not medically necessary, and documentation incomplete. Conflicting denial reasons require compliance review before appeal."
+    },
+    {
+      "doc_id": "auth-request",
+      "type": "auth_request",
+      "text": "Requesting approval for home nursing visits. Patient has complex wound care needs requiring licensed nursing."
+    },
+    {
+      "doc_id": "notes",
+      "type": "clinical_notes",
+      "text": "Physician notes indicate wound care is necessary. No functional assessment completed since 02/01/2026. Payer criteria requires assessment within 60 days. Assessment overdue as of submission date."
+    }
+  ],
+  "retrieved_policy_sections": [
+    "Conflicting denial reasons: escalate to compliance review before acting.",
+    "Functional assessment if last assessment older than 60 days."
+  ],
+  "facts": {
+    "payer": "Example Health Plan",
+    "service_requested": "Home nursing visits",
+    "denial_reason": "Medical necessity dispute and documentation incomplete",
+    "required_documents": ["functional assessment within 60 days"],
+    "confidence": 0.61,
+    "evidence_refs": [
+      {
+        "doc_id": "denial-letter",
+        "quote": "Conflicting denial reasons require compliance review before appeal."
+      }
+    ]
+  },
+  "findings": {
+    "missing_items": ["functional assessment within 60 days"],
+    "conflicts": ["denial cites both medical necessity and incomplete documentation"],
+    "appeal_basis": null,
+    "should_escalate": true,
+    "evidence_refs": [
+      {
+        "doc_id": "denial-letter",
+        "quote": "Conflicting denial reasons require compliance review before appeal."
+      },
+      {
+        "doc_id": "notes",
+        "quote": "No functional assessment completed since 02/01/2026."
+      }
+    ]
+  },
+  "recommendation": null,
+  "events": [
+    {
+      "type": "run_started",
+      "timestamp": "2026-04-11T15:00:00Z",
+      "payload": {
+        "run_id": "run-case-003-mock",
+        "case_id": "case-003",
+        "facility_id": "facility-a"
+      }
+    },
+    {
+      "type": "documents_loaded",
+      "timestamp": "2026-04-11T15:00:01Z",
+      "payload": {
+        "documents": [
+          {"doc_id": "denial-letter", "type": "denial_letter",
+           "text": "Claim denied for two stated reasons: service not medically necessary, and documentation incomplete. Conflicting denial reasons require compliance review before appeal."},
+          {"doc_id": "auth-request", "type": "auth_request",
+           "text": "Requesting approval for home nursing visits. Patient has complex wound care needs requiring licensed nursing."},
+          {"doc_id": "notes", "type": "clinical_notes",
+           "text": "Physician notes indicate wound care is necessary. No functional assessment completed since 02/01/2026. Payer criteria requires assessment within 60 days. Assessment overdue as of submission date."}
+        ]
+      }
+    },
+    {
+      "type": "facts_extracted",
+      "timestamp": "2026-04-11T15:00:02Z",
+      "payload": {
+        "facts": {
+          "payer": "Example Health Plan",
+          "service_requested": "Home nursing visits",
+          "denial_reason": "Medical necessity dispute and documentation incomplete",
+          "required_documents": ["functional assessment within 60 days"],
+          "confidence": 0.61,
+          "evidence_refs": [
+            {
+              "doc_id": "denial-letter",
+              "quote": "Conflicting denial reasons require compliance review before appeal."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "policy_retrieved",
+      "timestamp": "2026-04-11T15:00:03Z",
+      "payload": {
+        "retrieved_policy_sections": [
+          "Conflicting denial reasons: escalate to compliance review before acting.",
+          "Functional assessment if last assessment older than 60 days."
+        ]
+      }
+    },
+    {
+      "type": "analysis_completed",
+      "timestamp": "2026-04-11T15:00:05Z",
+      "payload": {
+        "findings": {
+          "missing_items": ["functional assessment within 60 days"],
+          "conflicts": ["denial cites both medical necessity and incomplete documentation"],
+          "appeal_basis": null,
+          "should_escalate": true,
+          "evidence_refs": [
+            {
+              "doc_id": "denial-letter",
+              "quote": "Conflicting denial reasons require compliance review before appeal."
+            },
+            {
+              "doc_id": "notes",
+              "quote": "No functional assessment completed since 02/01/2026."
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

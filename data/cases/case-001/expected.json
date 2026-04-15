@@ -1,0 +1,7 @@
+{
+  "expected_action_type": "approve_or_proceed",
+  "expected_missing_items": [],
+  "expected_should_escalate": false,
+  "expected_confidence_min": 0.85,
+  "expected_evidence_doc_ids": ["auth-request", "notes"]
+}

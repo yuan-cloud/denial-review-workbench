@@ -1,0 +1,146 @@
+{
+  "run_id": "run-case-001-mock",
+  "case_id": "case-001",
+  "facility_id": "facility-a",
+  "status": "approval_requested",
+  "is_replay_response": false,
+  "documents": [
+    {
+      "doc_id": "denial-letter",
+      "type": "denial_letter",
+      "text": "Authorization approved. All required documentation received and verified."
+    },
+    {
+      "doc_id": "auth-request",
+      "type": "auth_request",
+      "text": "Requesting approval for two skilled nursing follow-up visits. Physician order dated 04/08/2026 attached. Progress notes from 04/07/2026 included."
+    },
+    {
+      "doc_id": "notes",
+      "type": "clinical_notes",
+      "text": "Patient seen 04/07/2026. Progress stable. Physician order signed and attached. Follow-up visits medically necessary per Dr. Chen."
+    }
+  ],
+  "retrieved_policy_sections": [
+    "Required documentation for authorization: Signed physician order within 30 days of service. Progress notes within 30 days of service.",
+    "Approval threshold: all required documents present and dated correctly."
+  ],
+  "facts": {
+    "payer": "Example Health Plan",
+    "service_requested": "Skilled nursing follow-up",
+    "denial_reason": "None — authorization approved",
+    "required_documents": [
+      "signed physician order within 30 days",
+      "progress notes within 30 days"
+    ],
+    "confidence": 0.95,
+    "evidence_refs": [
+      {
+        "doc_id": "auth-request",
+        "quote": "Physician order dated 04/08/2026 attached."
+      }
+    ]
+  },
+  "findings": {
+    "missing_items": [],
+    "conflicts": [],
+    "appeal_basis": null,
+    "should_escalate": false,
+    "evidence_refs": [
+      {
+        "doc_id": "notes",
+        "quote": "Physician order signed and attached."
+      }
+    ]
+  },
+  "recommendation": {
+    "action_type": "approve_or_proceed",
+    "rationale": "All required documentation is present and dated correctly. No missing items. Authorization approved by payer.",
+    "draft_text": "All documentation requirements are met. Proceed with the authorized skilled nursing follow-up visits."
+  },
+  "events": [
+    {
+      "type": "run_started",
+      "timestamp": "2026-04-11T15:00:00Z",
+      "payload": {
+        "run_id": "run-case-001-mock",
+        "case_id": "case-001",
+        "facility_id": "facility-a"
+      }
+    },
+    {
+      "type": "documents_loaded",
+      "timestamp": "2026-04-11T15:00:01Z",
+      "payload": {
+        "documents": [
+          {"doc_id": "denial-letter", "type": "denial_letter",
+           "text": "Authorization approved. All required documentation received and verified."},
+          {"doc_id": "auth-request", "type": "auth_request",
+           "text": "Requesting approval for two skilled nursing follow-up visits. Physician order dated 04/08/2026 attached. Progress notes from 04/07/2026 included."},
+          {"doc_id": "notes", "type": "clinical_notes",
+           "text": "Patient seen 04/07/2026. Progress stable. Physician order signed and attached. Follow-up visits medically necessary per Dr. Chen."}
+        ]
+      }
+    },
+    {
+      "type": "facts_extracted",
+      "timestamp": "2026-04-11T15:00:02Z",
+      "payload": {
+        "facts": {
+          "payer": "Example Health Plan",
+          "service_requested": "Skilled nursing follow-up",
+          "denial_reason": "None — authorization approved",
+          "required_documents": [
+            "signed physician order within 30 days",
+            "progress notes within 30 days"
+          ],
+          "confidence": 0.95,
+          "evidence_refs": [
+            {"doc_id": "auth-request", "quote": "Physician order dated 04/08/2026 attached."}
+          ]
+        }
+      }
+    },
+    {
+      "type": "policy_retrieved",
+      "timestamp": "2026-04-11T15:00:03Z",
+      "payload": {
+        "retrieved_policy_sections": [
+          "Required documentation for authorization: Signed physician order within 30 days of service. Progress notes within 30 days of service.",
+          "Approval threshold: all required documents present and dated correctly."
+        ]
+      }
+    },
+    {
+      "type": "analysis_completed",
+      "timestamp": "2026-04-11T15:00:05Z",
+      "payload": {
+        "findings": {
+          "missing_items": [],
+          "conflicts": [],
+          "appeal_basis": null,
+          "should_escalate": false,
+          "evidence_refs": [
+            {"doc_id": "notes", "quote": "Physician order signed and attached."}
+          ]
+        }
+      }
+    },
+    {
+      "type": "draft_generated",
+      "timestamp": "2026-04-11T15:00:07Z",
+      "payload": {
+        "recommendation": {
+          "action_type": "approve_or_proceed",
+          "rationale": "All required documentation is present and dated correctly. No missing items.",
+          "draft_text": "All documentation requirements are met. Proceed with the authorized skilled nursing follow-up visits."
+        }
+      }
+    },
+    {
+      "type": "approval_requested",
+      "timestamp": "2026-04-11T15:00:08Z",
+      "payload": {}
+    }
+  ]
+}
