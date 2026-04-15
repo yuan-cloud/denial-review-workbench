@@ -1,4 +1,5 @@
 import logging
+import os
 
 try:
     import anthropic
@@ -10,21 +11,23 @@ from app.errors import PipelineError
 logger = logging.getLogger(__name__)
 
 MODEL_NAME = "claude-sonnet-4-6"
-client = anthropic.Anthropic(timeout=30.0) if anthropic is not None else None
+
+
+def _build_client():
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+    return anthropic.Anthropic(api_key=api_key, timeout=30.0)
 
 
 def call_model(system: str, user: str) -> str:
-    if client is None:
+    if anthropic is None:
         error = ImportError("anthropic package is not installed")
         logger.error("anthropic SDK unavailable: %s", error, exc_info=True)
         raise PipelineError(stage="call_model", raw_response="", cause=error) from error
 
-    if anthropic is None:
-        error = RuntimeError("anthropic SDK import unexpectedly unavailable")
-        logger.error("anthropic SDK unavailable after client init: %s", error, exc_info=True)
-        raise PipelineError(stage="call_model", raw_response="", cause=error) from error
-
     try:
+        client = _build_client()
         response = client.messages.create(
             model=MODEL_NAME,
             max_tokens=2048,
