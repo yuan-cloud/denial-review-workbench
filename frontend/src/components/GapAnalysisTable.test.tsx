@@ -22,18 +22,20 @@ const baseFindings: CaseFindings = {
 };
 
 describe("GapAnalysisTable", () => {
-  it("returns null when facts is null", () => {
-    const { container } = render(
+  it("shows pending state when facts is null", () => {
+    render(
       <GapAnalysisTable facts={null} findings={baseFindings} onEvidenceClick={() => {}} />
     );
-    expect(container.innerHTML).toBe("");
+    expect(screen.getByText("Gap Analysis")).toBeInTheDocument();
+    expect(screen.getByText(/gap analysis has not been completed yet/i)).toBeInTheDocument();
   });
 
-  it("returns null when findings is null", () => {
-    const { container } = render(
+  it("shows pending state when findings is null", () => {
+    render(
       <GapAnalysisTable facts={baseFacts} findings={null} onEvidenceClick={() => {}} />
     );
-    expect(container.innerHTML).toBe("");
+    expect(screen.getByText("Gap Analysis")).toBeInTheDocument();
+    expect(screen.getByText(/gap analysis has not been completed yet/i)).toBeInTheDocument();
   });
 
   it("renders requirement rows", () => {

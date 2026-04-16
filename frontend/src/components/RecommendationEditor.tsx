@@ -61,7 +61,19 @@ export default function RecommendationEditor({
     );
   }
 
-  if (!recommendation) return null;
+  if (!recommendation) {
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <WorkbenchSectionHeading
+          title="Recommendation"
+          description="No recommendation has been generated yet."
+        />
+        <WorkbenchNotice tone="neutral">
+          The recommendation will appear here after draft generation completes.
+        </WorkbenchNotice>
+      </div>
+    );
+  }
 
   async function handleApprove() {
     setApproving(true);

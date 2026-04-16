@@ -19,8 +19,8 @@ const baseFindings: CaseFindings = {
 };
 
 describe("RecommendationEditor", () => {
-  it("returns null when recommendation is null and not escalated", () => {
-    const { container } = render(
+  it("shows pending state when recommendation is null and not escalated", () => {
+    render(
       <RecommendationEditor
         recommendation={null}
         findings={baseFindings}
@@ -28,7 +28,9 @@ describe("RecommendationEditor", () => {
         onApprove={async () => {}}
       />
     );
-    expect(container.innerHTML).toBe("");
+    expect(screen.getByText("Recommendation")).toBeInTheDocument();
+    expect(screen.getByText(/recommendation will appear here/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
 
   it("renders action type and rationale", () => {

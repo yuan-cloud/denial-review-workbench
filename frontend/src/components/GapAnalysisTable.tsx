@@ -1,5 +1,6 @@
 import type { CaseFacts, CaseFindings } from "../types";
 import {
+  WorkbenchNotice,
   WorkbenchSectionHeading,
   workbenchStyles,
 } from "../ui/workbench";
@@ -10,8 +11,24 @@ interface Props {
   onEvidenceClick: (docId: string, quote: string) => void;
 }
 
+function formatDocLabel(docId: string): string {
+  return docId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: Props) {
-  if (!facts || !findings) return null;
+  if (!facts || !findings) {
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <WorkbenchSectionHeading
+          title="Gap Analysis"
+          description="Required-document coverage against the analyzed case packet."
+        />
+        <WorkbenchNotice tone="neutral">
+          Gap analysis has not been completed yet. Results will appear here after the analysis step finishes.
+        </WorkbenchNotice>
+      </div>
+    );
+  }
 
   const rows = facts.required_documents.map((req) => {
     const isMissing = findings.missing_items.some(
@@ -153,7 +170,7 @@ export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: P
                 }}
               >
                 <span style={{ color: "#2563eb", fontWeight: 500 }}>
-                  [{ref.doc_id}]
+                  [{formatDocLabel(ref.doc_id)}]
                 </span>{" "}
                 <span>&ldquo;{ref.quote}&rdquo;</span>
               </button>

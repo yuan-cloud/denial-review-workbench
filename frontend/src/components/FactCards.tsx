@@ -1,6 +1,7 @@
 import type { CaseFacts } from "../types";
 import {
   WorkbenchField,
+  WorkbenchNotice,
   WorkbenchSectionHeading,
   workbenchStyles,
 } from "../ui/workbench";
@@ -8,6 +9,10 @@ import {
 interface Props {
   facts: CaseFacts | null;
   onEvidenceClick: (docId: string, quote: string) => void;
+}
+
+function formatDocLabel(docId: string): string {
+  return docId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function confidenceColor(confidence: number): string {
@@ -29,7 +34,19 @@ function confidenceLabel(confidence: number): string {
 }
 
 export default function FactCards({ facts, onEvidenceClick }: Props) {
-  if (!facts) return null;
+  if (!facts) {
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <WorkbenchSectionHeading
+          title="Extracted Facts"
+          description="Structured outputs from the first model pass."
+        />
+        <WorkbenchNotice tone="neutral">
+          Facts have not been extracted yet. They will appear here after the extraction step completes.
+        </WorkbenchNotice>
+      </div>
+    );
+  }
 
   const pct = (facts.confidence * 100).toFixed(0) + "%";
 
@@ -94,7 +111,7 @@ export default function FactCards({ facts, onEvidenceClick }: Props) {
                 }}
               >
                 <span style={{ color: "#2563eb", fontWeight: 500 }}>
-                  {ref.doc_id}
+                  {formatDocLabel(ref.doc_id)}
                 </span>
                 {" — "}
                 <span>&ldquo;{ref.quote}&rdquo;</span>

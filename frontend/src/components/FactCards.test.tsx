@@ -14,11 +14,10 @@ const baseFacts: CaseFacts = {
 };
 
 describe("FactCards", () => {
-  it("returns null when facts is null", () => {
-    const { container } = render(
-      <FactCards facts={null} onEvidenceClick={() => {}} />
-    );
-    expect(container.innerHTML).toBe("");
+  it("shows pending state when facts is null", () => {
+    render(<FactCards facts={null} onEvidenceClick={() => {}} />);
+    expect(screen.getByText("Extracted Facts")).toBeInTheDocument();
+    expect(screen.getByText(/facts have not been extracted yet/i)).toBeInTheDocument();
   });
 
   it("renders payer, service, and denial reason", () => {
@@ -67,13 +66,13 @@ describe("FactCards", () => {
     expect(onClick).toHaveBeenCalledWith("denial-letter", "some quote");
   });
 
-  it("shows doc_id in evidence ref", () => {
+  it("shows human-readable doc label in evidence ref", () => {
     const facts: CaseFacts = {
       ...baseFacts,
       evidence_refs: [{ doc_id: "denial-letter", quote: "relevant text" }],
     };
     render(<FactCards facts={facts} onEvidenceClick={() => {}} />);
-    expect(screen.getByText("denial-letter")).toBeInTheDocument();
+    expect(screen.getByText("Denial Letter")).toBeInTheDocument();
   });
 
   it("applies green color for high confidence", () => {
