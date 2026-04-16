@@ -28,7 +28,6 @@ function describeApprovalError(error: unknown): string {
 
 export default function RecommendationEditor({
   recommendation,
-  findings,
   status,
   onApprove,
   onRefresh,
@@ -47,7 +46,7 @@ export default function RecommendationEditor({
 
   // Escalation — primary signal is the above-the-fold banner in RunPage;
   // here we just confirm the blocked state within the recommendation section.
-  if (findings?.should_escalate) {
+  if (status === "escalated") {
     return (
       <div style={{ marginBottom: 20 }}>
         <WorkbenchSectionHeading

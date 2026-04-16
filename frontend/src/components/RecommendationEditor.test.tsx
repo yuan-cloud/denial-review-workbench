@@ -129,6 +129,19 @@ describe("RecommendationEditor", () => {
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
 
+  it("uses status as the authoritative escalation signal when findings are null", () => {
+    render(
+      <RecommendationEditor
+        recommendation={null}
+        findings={null}
+        status="escalated"
+        onApprove={async () => {}}
+      />
+    );
+    expect(screen.getByText("Approval controls are disabled for escalated cases.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+  });
+
   it("shows inline approval error with reload action", async () => {
     const onApprove = vi.fn().mockRejectedValue(new Error("Run already approved"));
     const onRefresh = vi.fn();
