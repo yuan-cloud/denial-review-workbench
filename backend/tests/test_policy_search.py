@@ -1,7 +1,6 @@
 """Tests for app.policy_search — keyword-based policy section retrieval."""
 
 from pathlib import Path
-from unittest.mock import patch
 
 from app.policy_search import (
     _build_keywords,
