@@ -335,6 +335,7 @@ export function WorkbenchSectionHeading({
   badge,
   sticky = false,
   actions,
+  as: Tag = "h2",
 }: {
   eyebrow?: string;
   title: string;
@@ -342,6 +343,7 @@ export function WorkbenchSectionHeading({
   badge?: ReactNode;
   sticky?: boolean;
   actions?: ReactNode;
+  as?: "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
 }) {
   return (
     <div
@@ -354,7 +356,7 @@ export function WorkbenchSectionHeading({
       <div style={workbenchStyles.headingRow}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {eyebrow ? <div style={workbenchStyles.eyebrow}>{eyebrow}</div> : null}
-          <div style={workbenchStyles.title}>{title}</div>
+          <Tag style={workbenchStyles.title}>{title}</Tag>
           {description ? (
             <div style={workbenchStyles.description}>{description}</div>
           ) : null}

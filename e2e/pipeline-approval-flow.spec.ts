@@ -21,19 +21,11 @@ test.describe("Pipeline: full approval flow", () => {
       timeout: 60_000,
     });
 
-    // Verify three-panel layout
-    await expect(
-      page.getByRole("heading", { name: "Documents" })
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Gap Analysis" })
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Recommendation" })
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Run History" })
-    ).toBeVisible();
+    // Verify three-panel layout (section titles rendered by WorkbenchSectionHeading)
+    await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Gap Analysis" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Recommendation" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Run History" })).toBeVisible();
 
     // Verify facts rendered
     await expect(page.getByText("Payer", { exact: true })).toBeVisible();
@@ -46,12 +38,16 @@ test.describe("Pipeline: full approval flow", () => {
     await page.screenshot({ path: "docs/screenshots/02-run-results.png" });
 
     // 3. Evidence highlight — click first evidence ref to highlight in document
-    const evidenceButton = page.locator("button").filter({ hasText: /".+"/ }).first();
-    if (await evidenceButton.isVisible()) {
-      await evidenceButton.click();
-      // Wait for the highlight to render
-      await page.waitForTimeout(500);
-    }
+    const evidenceButton = page
+      .locator("button")
+      .filter({ hasText: /".+"/ })
+      .first();
+    await expect(evidenceButton).toBeVisible({ timeout: 5_000 });
+    await evidenceButton.click();
+
+    // Assert the <mark> highlight element rendered in the document panel
+    const mark = page.locator("mark").first();
+    await expect(mark).toBeVisible({ timeout: 3_000 });
     await page.screenshot({
       path: "docs/screenshots/03-evidence-highlight.png",
     });
