@@ -15,6 +15,15 @@ from pathlib import Path
 import httpx
 import pytest
 
+LIVE_PIPELINE_AVAILABLE = bool(
+    os.environ.get("ANTHROPIC_API_KEY")
+)
+
+skip_if_no_key = pytest.mark.skipif(
+    not LIVE_PIPELINE_AVAILABLE,
+    reason="ANTHROPIC_API_KEY not set — skipping live pipeline integration tests",
+)
+
 BASE = "http://localhost:8000"
 TIMEOUT = 90.0  # pipeline calls take 10-20s per case
 
@@ -57,6 +66,7 @@ class TestIntegrationHarness:
         assert "case-003" in ids
 
 
+@skip_if_no_key
 class TestCase002LivePipeline:
     """bd-38p.5.2: case-002 live output matches expected.json + approve/replay arc."""
 
@@ -128,6 +138,7 @@ class TestCase002LivePipeline:
         assert replayed["run_id"] == run_id
 
 
+@skip_if_no_key
 class TestCase003LiveEscalation:
     """bd-38p.5.3: case-003 escalation path and approve 409."""
 
