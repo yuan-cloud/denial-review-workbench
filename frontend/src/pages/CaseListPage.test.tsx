@@ -44,6 +44,7 @@ describe("CaseListPage", () => {
     mockFetch.mockResolvedValueOnce(okResponse(fullCases));
     render(<CaseListPage onSelectCase={() => {}} />);
     expect(screen.getByText("Denial Review Workbench")).toBeInTheDocument();
+    await screen.findByText("case-001");
   });
 
   it("shows loading state before cases arrive", () => {
@@ -193,9 +194,12 @@ describe("CaseListPage", () => {
     await userEvent.click(buttons[0]);
 
     await waitFor(() => {
-      // Error shown inline on the row (replaces summary text)
+      // Error shown inline on the row while preserving the case summary
       expect(
         screen.getByText("Pipeline could not finish this review request")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("Happy-path packet with all documentation present.")
       ).toBeInTheDocument();
     });
 

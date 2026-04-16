@@ -89,7 +89,7 @@ test.describe("Pipeline: full approval flow", () => {
     await page.screenshot({ path: "docs/screenshots/04-after-approve.png" });
 
     // 5. Replay — REPLAY badge appears
-    await page.getByRole("button", { name: "Replay" }).click();
+    await page.getByRole("button", { name: "Replay from JSONL" }).click();
     await expect(page.getByText("REPLAY", { exact: true })).toBeVisible({
       timeout: 10_000,
     });
@@ -133,7 +133,7 @@ test.describe("Pipeline: full approval flow", () => {
     await page.screenshot({ path: "docs/screenshots/06-escalation.png" });
 
     // Replay preserves the blocked framing
-    await page.getByRole("button", { name: "Replay" }).click();
+    await page.getByRole("button", { name: "Replay from JSONL" }).click();
     await expect(page.getByText("REPLAY", { exact: true })).toBeVisible({
       timeout: 10_000,
     });

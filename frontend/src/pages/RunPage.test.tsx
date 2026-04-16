@@ -291,18 +291,67 @@ describe("RunPage", () => {
     });
   });
 
+  it("keeps the current workspace visible while a manual reload is pending", async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    });
+
+    mockFetch.mockResolvedValueOnce(errorResponse(409, "Already approved"));
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Reload run" })).toBeInTheDocument();
+    });
+
+    mockFetch.mockReturnValueOnce(new Promise(() => {}));
+    await userEvent.click(screen.getByRole("button", { name: "Reload run" }));
+
+    expect(screen.getByText("Refreshing run")).toBeInTheDocument();
+    expect(screen.getByText("Acme")).toBeInTheDocument();
+    expect(screen.queryByText("Loading run")).not.toBeInTheDocument();
+  });
+
+  it("keeps the current workspace visible when a manual reload fails", async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    });
+
+    mockFetch.mockResolvedValueOnce(errorResponse(409, "Already approved"));
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Reload run" })).toBeInTheDocument();
+    });
+
+    mockFetch.mockResolvedValueOnce(errorResponse(500, "Backend unavailable"));
+    await userEvent.click(screen.getByRole("button", { name: "Reload run" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Latest reload failed")).toBeInTheDocument();
+      expect(screen.getByText("Backend unavailable")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Acme")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry fetch" })).toBeInTheDocument();
+  });
+
   it("shows inline mutation error on replay failure without losing run data", async () => {
     mockFetch.mockResolvedValueOnce(okResponse(baseRun));
     render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Replay" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Replay from JSONL" })).toBeInTheDocument();
     });
 
     // Replay fails
     mockFetch.mockResolvedValueOnce(errorResponse(404, "Replay unavailable"));
 
-    await userEvent.click(screen.getByRole("button", { name: "Replay" }));
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
 
     await waitFor(() => {
       expect(screen.getByText("Replay did not complete")).toBeInTheDocument();
@@ -322,14 +371,14 @@ describe("RunPage", () => {
     render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Replay" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Replay from JSONL" })).toBeInTheDocument();
     });
 
     mockFetch.mockResolvedValueOnce(
       okResponse({ ...baseRun, is_replay_response: true })
     );
 
-    await user.click(screen.getByRole("button", { name: "Replay" }));
+    await user.click(screen.getByRole("button", { name: "Replay from JSONL" }));
 
     await waitFor(() => {
       expect(screen.getByText("REPLAY")).toBeInTheDocument();
@@ -379,7 +428,7 @@ describe("RunPage", () => {
     render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Replay" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Replay from JSONL" })).toBeInTheDocument();
     });
   });
 });

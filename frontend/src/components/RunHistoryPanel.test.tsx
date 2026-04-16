@@ -23,7 +23,7 @@ describe("RunHistoryPanel", () => {
     render(
       <RunHistoryPanel events={[]} isReplayResponse={false} onReplay={async () => {}} />
     );
-    expect(screen.getByRole("button", { name: "Replay" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Replay from JSONL" })).toBeDisabled();
   });
 
   it("renders event labels", () => {
@@ -40,6 +40,7 @@ describe("RunHistoryPanel", () => {
       <RunHistoryPanel events={sampleEvents} isReplayResponse={true} onReplay={async () => {}} />
     );
     expect(screen.getByText("REPLAY")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh replay" })).toBeInTheDocument();
   });
 
   it("hides REPLAY badge when isReplayResponse is false", () => {
@@ -54,7 +55,7 @@ describe("RunHistoryPanel", () => {
     render(
       <RunHistoryPanel events={sampleEvents} isReplayResponse={false} onReplay={onReplay} />
     );
-    await userEvent.click(screen.getByRole("button", { name: "Replay" }));
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
     expect(onReplay).toHaveBeenCalled();
   });
 
@@ -129,7 +130,7 @@ describe("RunHistoryPanel", () => {
       <RunHistoryPanel events={sampleEvents} isReplayResponse={false} onReplay={onReplay} />
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Replay" }));
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
 
     expect(screen.getByText("Replay did not complete")).toBeInTheDocument();
     expect(screen.getByText(/live run stays on screen/i)).toBeInTheDocument();

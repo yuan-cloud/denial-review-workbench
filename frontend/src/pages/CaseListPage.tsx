@@ -147,12 +147,13 @@ export default function CaseListPage({ onSelectCase }: Props) {
                           c.expected_path_type
                         )}
                       </td>
-                      <td style={{ ...workbenchStyles.denseTableCell, ...workbenchStyles.subdued, maxWidth: 320 }}>
-                        {rowError ? (
-                          <span style={{ color: "#b42318", fontSize: 12 }}>{rowError}</span>
-                        ) : (
-                          c.summary
-                        )}
+                      <td style={{ ...workbenchStyles.denseTableCell, maxWidth: 320 }}>
+                        <div style={{ display: "grid", gap: rowError ? 6 : 0 }}>
+                          <span style={workbenchStyles.subdued}>{c.summary}</span>
+                          {rowError ? (
+                            <span style={{ color: "#b42318", fontSize: 12 }}>{rowError}</span>
+                          ) : null}
+                        </div>
                       </td>
                       <td
                         style={{

@@ -129,8 +129,6 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
     setLoading(true);
     setFetchError(null);
     setFetchNotFound(false);
-    setRun(null);
-    setActiveQuote(null);
     getRun(runId)
       .then((data) => {
         setRun(data);
@@ -251,8 +249,8 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
     />
   );
 
-  // Loading or fetch error — show status screen with retry
-  if (loading || (fetchError && !run)) {
+  // Initial loading or fetch error before any run data exists — show full status screen.
+  if (!run && (loading || fetchError)) {
     const title = loading
       ? "Loading run"
       : fetchNotFound
@@ -335,6 +333,12 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
   const lastEventAt =
     run.events.length > 0 ? run.events[run.events.length - 1].timestamp : null;
   const panelHeight = isEscalated ? "min(64vh, 760px)" : "min(68vh, 820px)";
+  const inlineFetchTone = loading ? "primary" : fetchNotFound ? "warning" : "danger";
+  const inlineFetchTitle = loading
+    ? "Refreshing run"
+    : fetchNotFound
+      ? "Latest reload could not find the run"
+      : "Latest reload failed";
 
   return (
     <WorkbenchScreen fullHeight maxWidth={1480}>
@@ -415,6 +419,42 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
             meta={`Last event ${formatTimestamp(lastEventAt)}`}
           />
         </WorkbenchSummaryStrip>
+
+        {loading || fetchError ? (
+          <WorkbenchNotice title={inlineFetchTitle} tone={inlineFetchTone}>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div>
+                {loading ? (
+                  <>
+                    Keeping the current workspace visible while the latest state loads.
+                  </>
+                ) : fetchNotFound ? (
+                  <>
+                    The latest reload says <strong>{runId}</strong> is unavailable. The last
+                    loaded workspace is still on screen so you can keep reviewing while you
+                    decide whether to retry or go back to the queue.
+                  </>
+                ) : (
+                  <>
+                    The latest reload failed. The last loaded workspace stays visible so you
+                    do not lose your current review context.
+                  </>
+                )}
+              </div>
+              {fetchError ? <div>{fetchError}</div> : null}
+              {!loading ? (
+                <WorkbenchActionBar>
+                  <WorkbenchButton onClick={fetchRun} size="sm" variant="secondary">
+                    Retry fetch
+                  </WorkbenchButton>
+                  <WorkbenchButton onClick={onBack} size="sm" variant="ghost">
+                    &larr; Back to case list
+                  </WorkbenchButton>
+                </WorkbenchActionBar>
+              ) : null}
+            </div>
+          </WorkbenchNotice>
+        ) : null}
 
         {isEscalated && (
           <WorkbenchNotice title="Case Escalated — Workflow Blocked" tone="danger">

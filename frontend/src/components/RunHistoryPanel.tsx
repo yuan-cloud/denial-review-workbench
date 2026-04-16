@@ -135,6 +135,11 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
   const runStartTs = events.length > 0 ? events[0].timestamp : null;
   const [replaying, setReplaying] = useState(false);
   const [replayError, setReplayError] = useState<string | null>(null);
+  const replayButtonLabel = replaying
+    ? "Replaying…"
+    : isReplayResponse
+      ? "Refresh replay"
+      : "Replay from JSONL";
 
   async function handleReplay() {
     setReplaying(true);
@@ -221,7 +226,7 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
             disabled={events.length === 0 || replaying}
             size="sm"
           >
-            {replaying ? "Replaying…" : "Replay"}
+            {replayButtonLabel}
           </WorkbenchButton>
         </WorkbenchActionBar>
         {replayError ? (
