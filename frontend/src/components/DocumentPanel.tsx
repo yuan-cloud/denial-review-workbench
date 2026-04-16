@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import type { CaseDocument } from "../types";
 import {
-  WorkbenchField,
+  WorkbenchNotice,
   WorkbenchSectionHeading,
+  WorkbenchStatusPill,
   workbenchStyles,
 } from "../ui/workbench";
 
@@ -13,7 +14,38 @@ interface Props {
   activeQuote: { doc_id: string; quote: string } | null;
 }
 
-function highlightText(text: string, quote: string): ReactNode {
+type QuoteMatch =
+  | { status: "matched"; index: number; matchedQuote: string }
+  | { status: "missing" };
+
+const DOCUMENT_META: Record<
+  CaseDocument["type"],
+  { title: string; description: string }
+> = {
+  denial_letter: {
+    title: "Denial Letter",
+    description: "Payer determination and stated denial rationale.",
+  },
+  auth_request: {
+    title: "Authorization Request",
+    description: "Submitted service request and payer context.",
+  },
+  clinical_notes: {
+    title: "Clinical Notes",
+    description: "Supporting clinical documentation from the case packet.",
+  },
+};
+
+function formatFacilityLabel(facilityId: string): string {
+  return facilityId
+    .split("-")
+    .map((part) =>
+      part.length === 1 ? part.toUpperCase() : part[0].toUpperCase() + part.slice(1)
+    )
+    .join(" ");
+}
+
+function findQuoteMatch(text: string, quote: string): QuoteMatch {
   let idx = text.indexOf(quote);
   let matchedQuote = quote;
 
@@ -25,21 +57,22 @@ function highlightText(text: string, quote: string): ReactNode {
   }
 
   if (idx === -1) {
-    console.warn("Evidence quote not found in document text:", quote);
-    return (
-      <>
-        {text}
-        <span title="Quote not found in document" style={{ fontSize: 11, color: "#b45309", marginLeft: 4 }}>
-          ⚠ quote not found
-        </span>
-      </>
-    );
+    return { status: "missing" };
   }
+
+  return { status: "matched", index: idx, matchedQuote };
+}
+
+function highlightText(text: string, match: QuoteMatch): ReactNode {
+  if (match.status === "missing") {
+    return text;
+  }
+
   return (
     <>
-      {text.slice(0, idx)}
-      <mark style={{ backgroundColor: "#fef08a" }}>{matchedQuote}</mark>
-      {text.slice(idx + quote.length)}
+      {text.slice(0, match.index)}
+      <mark style={{ backgroundColor: "#fef08a" }}>{match.matchedQuote}</mark>
+      {text.slice(match.index + match.matchedQuote.length)}
     </>
   );
 }
@@ -50,25 +83,113 @@ export default function DocumentPanel({
   facilityId,
   activeQuote,
 }: Props) {
+  const policyPackLabel = facilityId ? formatFacilityLabel(facilityId) : null;
+  const activeDocument = activeQuote
+    ? documents.find((doc) => doc.doc_id === activeQuote.doc_id) ?? null
+    : null;
+  const activeDocumentMeta = activeDocument
+    ? DOCUMENT_META[activeDocument.type]
+    : null;
+  const activeMatch =
+    activeDocument && activeQuote
+      ? findQuoteMatch(activeDocument.text, activeQuote.quote)
+      : null;
+  const policySectionCount = retrievedPolicySections.length;
+
   return (
     <div>
       <WorkbenchSectionHeading
         title="Documents"
-        description="Source documents and retrieved policy excerpts."
+        description="Human-readable source packet with linked policy excerpts."
         sticky
+        badge={
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            {policyPackLabel ? (
+              <WorkbenchStatusPill tone="neutral">{policyPackLabel}</WorkbenchStatusPill>
+            ) : null}
+            {policySectionCount > 0 ? (
+              <WorkbenchStatusPill tone="neutral">
+                {policySectionCount} policy excerpt{policySectionCount === 1 ? "" : "s"}
+              </WorkbenchStatusPill>
+            ) : null}
+          </div>
+        }
       />
 
+      {activeQuote && activeDocumentMeta ? (
+        <div style={{ marginBottom: 12 }}>
+          <WorkbenchNotice
+            title={`Evidence focus — ${activeDocumentMeta.title}`}
+            tone={activeMatch?.status === "missing" ? "warning" : "primary"}
+          >
+            <div style={{ display: "grid", gap: 6 }}>
+              <div>
+                {activeMatch?.status === "missing"
+                  ? "Jumped to the cited source, but the quoted text was not found verbatim. Review the source text manually below."
+                  : "Jumped to the cited source. The referenced text is highlighted in the document below."}
+              </div>
+              <div style={{ ...workbenchStyles.mono, fontSize: 11 }}>
+                Evidence quote: "{activeQuote.quote}"
+              </div>
+            </div>
+          </WorkbenchNotice>
+        </div>
+      ) : null}
+
       <div style={workbenchStyles.stack}>
-        {documents.map((doc) => (
-          <div key={doc.doc_id} id={`doc-${doc.doc_id}`}>
-            <WorkbenchField
-              label={doc.doc_id.replace(/-/g, " ")}
-              style={
-                activeQuote?.doc_id === doc.doc_id
-                  ? { borderColor: "#b8c3d3", background: "#f8fafc" }
-                  : undefined
-              }
+        {documents.map((doc) => {
+          const docMeta = DOCUMENT_META[doc.type];
+          const isActive = activeQuote?.doc_id === doc.doc_id;
+          const quoteMatch =
+            isActive && activeQuote ? findQuoteMatch(doc.text, activeQuote.quote) : null;
+          const quoteMissing = quoteMatch?.status === "missing";
+
+          return (
+            <section
+              key={doc.doc_id}
+              id={`doc-${doc.doc_id}`}
+              style={{
+                border: `1px solid ${isActive ? "#b8c3d3" : "#d6dde6"}`,
+                borderRadius: 12,
+                background: isActive ? "#f8fafc" : "#ffffff",
+                boxShadow: "0 1px 2px rgba(16, 24, 40, 0.04)",
+                padding: 14,
+              }}
             >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  marginBottom: 12,
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={workbenchStyles.eyebrow}>Case document</div>
+                  <h3 style={{ ...workbenchStyles.title, margin: "6px 0 0", fontSize: 16 }}>
+                    {docMeta.title}
+                  </h3>
+                  <div style={{ ...workbenchStyles.description, marginTop: 4 }}>
+                    {docMeta.description}
+                  </div>
+                </div>
+                {isActive ? (
+                  <WorkbenchStatusPill tone={quoteMissing ? "warning" : "primary"}>
+                    {quoteMissing ? "Review quote" : "Evidence focus"}
+                  </WorkbenchStatusPill>
+                ) : null}
+              </div>
+
+              {quoteMissing ? (
+                <div style={{ marginBottom: 12 }}>
+                  <WorkbenchNotice tone="warning">
+                    The cited quote could not be matched exactly in this source. The
+                    document text is unchanged so you can review the original wording.
+                  </WorkbenchNotice>
+                </div>
+              ) : null}
+
               <div
                 style={{
                   fontSize: 14,
@@ -76,35 +197,46 @@ export default function DocumentPanel({
                   whiteSpace: "pre-wrap",
                 }}
               >
-                {activeQuote && activeQuote.doc_id === doc.doc_id
-                  ? highlightText(doc.text, activeQuote.quote)
-                  : doc.text}
+                {isActive && quoteMatch ? highlightText(doc.text, quoteMatch) : doc.text}
               </div>
-            </WorkbenchField>
-          </div>
-        ))}
+            </section>
+          );
+        })}
       </div>
 
       {retrievedPolicySections.length > 0 && (
         <div style={workbenchStyles.dividerTop}>
           <WorkbenchSectionHeading
-            title="Policy Sections"
-            description="Retrieved policy text from the active facility pack."
+            title="Policy Excerpts"
+            description={
+              policyPackLabel
+                ? `Retrieved policy text from the ${policyPackLabel} pack.`
+                : "Retrieved policy text from the active facility pack."
+            }
           />
-          {retrievedPolicySections.map((section, i) => (
-            <WorkbenchField key={i} label={`Section ${i + 1}`} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-                {section}
+          <div style={workbenchStyles.stack}>
+            {retrievedPolicySections.map((section, i) => (
+              <div
+                key={i}
+                style={{ fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap" }}
+              >
+                <section
+                  style={{
+                    border: "1px solid #d6dde6",
+                    borderRadius: 12,
+                    background: "#f8fafc",
+                    padding: 14,
+                  }}
+                >
+                  <div style={{ ...workbenchStyles.label, marginBottom: 8 }}>
+                    Policy excerpt {i + 1}
+                  </div>
+                  {section}
+                </section>
               </div>
-            </WorkbenchField>
-          ))}
+            ))}
+          </div>
         </div>
-      )}
-
-      {facilityId && (
-        <p style={{ marginTop: 16, fontSize: 12, ...workbenchStyles.subtle }}>
-          Policy pack: {facilityId}
-        </p>
       )}
     </div>
   );

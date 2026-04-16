@@ -26,10 +26,16 @@ test.describe("Pipeline: full approval flow", () => {
     await expect(page.getByRole("heading", { name: "Gap Analysis" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Recommendation" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Run History" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Denial Letter" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Authorization Request" })
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Clinical Notes" })).toBeVisible();
 
     // Verify facts rendered
-    await expect(page.getByText("Payer", { exact: true })).toBeVisible();
-    await expect(page.getByText("Confidence", { exact: true })).toBeVisible();
+    const workspace = page.getByTestId("run-workspace-grid");
+    await expect(workspace.getByText("Payer", { exact: true })).toBeVisible();
+    await expect(workspace.getByText("Confidence", { exact: true })).toBeVisible();
     await expect(
       page.getByText("request_missing_documents", { exact: true })
     ).toBeVisible();
@@ -38,9 +44,8 @@ test.describe("Pipeline: full approval flow", () => {
     await page.screenshot({ path: "docs/screenshots/02-run-results.png" });
 
     // 3. Evidence highlight — click first evidence ref to highlight in document
-    const evidenceButton = page
-      .locator("button")
-      .filter({ hasText: /".+"/ })
+    const evidenceButton = workspace
+      .getByRole("button", { name: /denial-letter|auth-request|notes/ })
       .first();
     await expect(evidenceButton).toBeVisible({ timeout: 5_000 });
     await evidenceButton.click();
@@ -59,7 +64,11 @@ test.describe("Pipeline: full approval flow", () => {
 
     // Wait for approved state
     await expect(page.getByText("Approved ✓")).toBeVisible({ timeout: 15_000 });
-    await expect(textarea).toBeDisabled();
+    await expect(page.getByRole("textbox")).toHaveCount(0);
+    await expect(workspace.getByText("Final Text", { exact: true })).toBeVisible();
+    await expect(
+      workspace.getByText("E2E test: Approved with edits.", { exact: true })
+    ).toBeVisible();
 
     // Screenshot: approved badge with final recommendation
     await page.screenshot({ path: "docs/screenshots/04-after-approve.png" });
@@ -84,7 +93,7 @@ test.describe("Pipeline: full approval flow", () => {
     await case003Row.getByRole("button", { name: "Run Review" }).click();
 
     // Wait for escalation notice
-    await expect(page.getByText("Escalated to Compliance Review")).toBeVisible({
+    await expect(page.getByText("Case Escalated — Workflow Blocked")).toBeVisible({
       timeout: 60_000,
     });
 
