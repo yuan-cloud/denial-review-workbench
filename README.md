@@ -2,6 +2,8 @@
 
 **Auditable human-in-the-loop denial review for document-heavy healthcare ops**
 
+Denial review pipelines process a full case — extraction, gap analysis, draft — in under 15 seconds. Replay any approved run: status is preserved, no model call is made, and the JSONL log gains exactly one line. Verify it yourself: `./bench.sh`
+
 ---
 
 ## Overview
@@ -103,6 +105,8 @@ Conflicting denial reasons trigger `should_escalate: true`. A red banner blocks 
 **V1 run statuses:** `approval_requested` → `approved` or `escalated`
 
 **Replay invariant:** The `approved` event carries `final_recommendation` — exactly what the human signed off on. Replay reconstructs this from the JSONL log without any model call.
+
+**Run logs** are append-only JSONL. Each event is typed, timestamped, and replayable. Format is one translation layer from OpenTelemetry spans.
 
 ---
 
