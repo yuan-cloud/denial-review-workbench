@@ -11,8 +11,12 @@ function okResponse(data: unknown) {
   return { ok: true, status: 200, json: () => Promise.resolve(data) };
 }
 
-function errorResponse(status: number) {
-  return { ok: false, status, json: () => Promise.resolve({}) };
+function errorResponse(status: number, detail?: string) {
+  return {
+    ok: false,
+    status,
+    json: () => Promise.resolve(detail ? { detail } : {}),
+  };
 }
 
 const baseRun: RunStatus = {
@@ -68,12 +72,50 @@ describe("RunPage", () => {
     });
   });
 
-  it("shows error on fetch failure", async () => {
-    mockFetch.mockResolvedValueOnce(errorResponse(404));
+  it("shows loading state before fetch completes", async () => {
+    // Never resolve — keeps component in loading state
+    mockFetch.mockReturnValueOnce(new Promise(() => {}));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    expect(screen.getByText(/Loading run data/)).toBeInTheDocument();
+  });
+
+  it("shows fetch error with retry button on non-404 failure", async () => {
+    mockFetch.mockResolvedValueOnce(errorResponse(500));
     render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/failed: 404/)).toBeInTheDocument();
+      expect(screen.getByText("Failed to load run")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    });
+  });
+
+  it("shows not-found error on 404", async () => {
+    mockFetch.mockResolvedValueOnce(
+      errorResponse(404, "No persisted event log exists for this run")
+    );
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Run not found")).toBeInTheDocument();
+      expect(screen.getByText(/No persisted event log exists/)).toBeInTheDocument();
+    });
+  });
+
+  it("retry re-fetches and renders on success", async () => {
+    mockFetch.mockResolvedValueOnce(errorResponse(500));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    });
+
+    // Retry succeeds
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Acme")).toBeInTheDocument();
     });
   });
 
@@ -122,6 +164,73 @@ describe("RunPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Approved/)).toBeInTheDocument();
+    });
+  });
+
+  it("shows inline mutation error on approve failure without losing run data", async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    });
+
+    // Approve fails with 409
+    mockFetch.mockResolvedValueOnce(errorResponse(409, "Already approved"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() => {
+      // Mutation error shown inline
+      expect(screen.getByText("Action failed")).toBeInTheDocument();
+      expect(screen.getByText(/Already approved/)).toBeInTheDocument();
+      // Run data still visible — not wiped
+      expect(screen.getByText("Acme")).toBeInTheDocument();
+      // Dismiss button present
+      expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
+    });
+  });
+
+  it("dismisses mutation error", async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    });
+
+    mockFetch.mockResolvedValueOnce(errorResponse(409, "Already approved"));
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Action failed")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Action failed")).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows inline mutation error on replay failure without losing run data", async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replay" })).toBeInTheDocument();
+    });
+
+    // Replay fails
+    mockFetch.mockResolvedValueOnce(errorResponse(404, "Replay unavailable"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Replay" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Action failed")).toBeInTheDocument();
+      expect(screen.getByText(/Replay unavailable/)).toBeInTheDocument();
+      // Run data preserved
+      expect(screen.getByText("Acme")).toBeInTheDocument();
     });
   });
 
