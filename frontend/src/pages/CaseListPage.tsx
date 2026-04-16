@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { CaseListItem } from "../types";
-import { getCases, postRun } from "../api";
+import { ApiError, getCases, postRun } from "../api";
 import {
+  WorkbenchActionBar,
   WorkbenchButton,
   WorkbenchNotice,
   WorkbenchPageHeader,
@@ -22,6 +23,20 @@ interface Props {
   onSelectCase: (caseId: string, runId: string) => void;
 }
 
+function describeQueueError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.detail ?? `Case queue unavailable (${error.status}). Retry the queue load.`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+function describeRunStartError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.detail ?? `Review could not start (${error.status}). Retry Run Review.`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function CaseListPage({ onSelectCase }: Props) {
   const [cases, setCases] = useState<CaseListItem[]>([]);
   const [fetchingCases, setFetchingCases] = useState(true);
@@ -29,12 +44,18 @@ export default function CaseListPage({ onSelectCase }: Props) {
   const [runningCase, setRunningCase] = useState<string | null>(null);
   const [runError, setRunError] = useState<{ caseId: string; message: string } | null>(null);
 
-  useEffect(() => {
+  const loadCases = useCallback(() => {
+    setFetchingCases(true);
+    setFetchError(null);
     getCases()
       .then(setCases)
-      .catch((e) => setFetchError(e instanceof Error ? e.message : String(e)))
+      .catch((e) => setFetchError(describeQueueError(e)))
       .finally(() => setFetchingCases(false));
   }, []);
+
+  useEffect(() => {
+    loadCases();
+  }, [loadCases]);
 
   async function handleRun(caseId: string) {
     setRunningCase(caseId);
@@ -43,7 +64,7 @@ export default function CaseListPage({ onSelectCase }: Props) {
       const run = await postRun(caseId);
       onSelectCase(caseId, run.run_id);
     } catch (e) {
-      setRunError({ caseId, message: e instanceof Error ? e.message : String(e) });
+      setRunError({ caseId, message: describeRunStartError(e) });
       setRunningCase(null);
     }
   }
@@ -62,12 +83,6 @@ export default function CaseListPage({ onSelectCase }: Props) {
           }
         />
 
-        {fetchError ? (
-          <WorkbenchNotice title="Failed to load cases" tone="danger">
-            {fetchError}
-          </WorkbenchNotice>
-        ) : null}
-
         <WorkbenchPanel>
           <WorkbenchSectionHeading
             title="Case Queue"
@@ -80,6 +95,18 @@ export default function CaseListPage({ onSelectCase }: Props) {
 
           {fetchingCases ? (
             <WorkbenchNotice>Loading case queue…</WorkbenchNotice>
+          ) : fetchError ? (
+            <div style={{ display: "grid", gap: 12 }}>
+              <WorkbenchNotice title="Case queue unavailable" tone="danger">
+                The queue could not be loaded. Retry the queue load before starting a review.
+                <div style={{ marginTop: 6 }}>{fetchError}</div>
+              </WorkbenchNotice>
+              <WorkbenchActionBar>
+                <WorkbenchButton onClick={loadCases} size="sm" variant="primary">
+                  Retry case queue
+                </WorkbenchButton>
+              </WorkbenchActionBar>
+            </div>
           ) : cases.length === 0 && !fetchError ? (
             <WorkbenchNotice tone="neutral">
               No cases available for review. Check back later or verify the data directory.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Recommendation, CaseFindings } from "../types";
+import { ApiError } from "../api";
 import {
   WorkbenchActionBar,
   WorkbenchButton,
@@ -14,7 +15,15 @@ interface Props {
   recommendation: Recommendation | null;
   findings: CaseFindings | null;
   status: "approval_requested" | "approved" | "escalated";
-  onApprove: (draftText: string) => void;
+  onApprove: (draftText: string) => Promise<void>;
+  onRefresh?: () => void;
+}
+
+function describeApprovalError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.detail ?? `Approval request failed (${error.status}). Reload the run and try again.`;
+  }
+  return error instanceof Error ? error.message : String(error);
 }
 
 export default function RecommendationEditor({
@@ -22,16 +31,19 @@ export default function RecommendationEditor({
   findings,
   status,
   onApprove,
+  onRefresh,
 }: Props) {
   const [draftText, setDraftText] = useState(recommendation?.draft_text ?? "");
   const [approving, setApproving] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   // Sync draft text when the upstream recommendation changes (e.g. after replay).
   useEffect(() => {
     if (recommendation?.draft_text) {
       setDraftText(recommendation.draft_text);
     }
-  }, [recommendation?.draft_text]);
+    setApprovalError(null);
+  }, [recommendation?.draft_text, status]);
 
   // Escalation — primary signal is the above-the-fold banner in RunPage;
   // here we just confirm the blocked state within the recommendation section.
@@ -53,8 +65,11 @@ export default function RecommendationEditor({
 
   async function handleApprove() {
     setApproving(true);
+    setApprovalError(null);
     try {
       await onApprove(draftText);
+    } catch (error) {
+      setApprovalError(describeApprovalError(error));
     } finally {
       setApproving(false);
     }
@@ -92,7 +107,10 @@ export default function RecommendationEditor({
           <div style={{ ...workbenchStyles.label, marginBottom: 6 }}>Draft Text</div>
           <textarea
             value={draftText}
-            onChange={(e) => setDraftText(e.target.value)}
+            onChange={(e) => {
+              setDraftText(e.target.value);
+              setApprovalError(null);
+            }}
             rows={4}
             style={{
               width: "100%",
@@ -109,6 +127,32 @@ export default function RecommendationEditor({
           />
         </div>
       )}
+
+      {approvalError && !isApproved ? (
+        <WorkbenchNotice title="Approval did not complete" tone="danger">
+          <div style={{ display: "grid", gap: 10 }}>
+            <div>
+              The drafted text is still in place. Reload the run if server state may
+              have changed, or adjust the draft and approve again.
+            </div>
+            <div>{approvalError}</div>
+            <WorkbenchActionBar>
+              {onRefresh ? (
+                <WorkbenchButton onClick={onRefresh} size="sm" variant="secondary">
+                  Reload run
+                </WorkbenchButton>
+              ) : null}
+              <WorkbenchButton
+                onClick={() => setApprovalError(null)}
+                size="sm"
+                variant="ghost"
+              >
+                Dismiss
+              </WorkbenchButton>
+            </WorkbenchActionBar>
+          </div>
+        </WorkbenchNotice>
+      ) : null}
 
       <WorkbenchActionBar>
         {isApproved ? (

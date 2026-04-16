@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { RunEvent } from "../types";
+import { ApiError } from "../api";
 import {
   WorkbenchActionBar,
   WorkbenchButton,
@@ -11,7 +13,7 @@ import {
 interface Props {
   events: RunEvent[];
   isReplayResponse: boolean;
-  onReplay: () => void;
+  onReplay: () => Promise<void>;
 }
 
 const EVENT_LABELS: Record<string, string> = {
@@ -122,8 +124,29 @@ function formatEventType(type: string): string {
   return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function describeReplayError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.detail ?? `Replay failed (${error.status}). Retry the replay request.`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: Props) {
   const runStartTs = events.length > 0 ? events[0].timestamp : null;
+  const [replaying, setReplaying] = useState(false);
+  const [replayError, setReplayError] = useState<string | null>(null);
+
+  async function handleReplay() {
+    setReplaying(true);
+    setReplayError(null);
+    try {
+      await onReplay();
+    } catch (error) {
+      setReplayError(describeReplayError(error));
+    } finally {
+      setReplaying(false);
+    }
+  }
 
   return (
     <div>
@@ -194,13 +217,38 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
       <div style={workbenchStyles.dividerTop}>
         <WorkbenchActionBar>
           <WorkbenchButton
-            onClick={onReplay}
-            disabled={events.length === 0}
+            onClick={handleReplay}
+            disabled={events.length === 0 || replaying}
             size="sm"
           >
-            Replay
+            {replaying ? "Replaying…" : "Replay"}
           </WorkbenchButton>
         </WorkbenchActionBar>
+        {replayError ? (
+          <div style={{ marginTop: 10 }}>
+            <WorkbenchNotice title="Replay did not complete" tone="danger">
+              <div style={{ display: "grid", gap: 10 }}>
+                <div>
+                  The live run stays on screen. Retry replay if you still need a
+                  read-only reconstruction from JSONL.
+                </div>
+                <div>{replayError}</div>
+                <WorkbenchActionBar>
+                  <WorkbenchButton onClick={handleReplay} size="sm" variant="secondary">
+                    Retry replay
+                  </WorkbenchButton>
+                  <WorkbenchButton
+                    onClick={() => setReplayError(null)}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    Dismiss
+                  </WorkbenchButton>
+                </WorkbenchActionBar>
+              </div>
+            </WorkbenchNotice>
+          </div>
+        ) : null}
         {events.length > 0 ? (
           <div style={{ fontSize: 11, ...workbenchStyles.subtle, marginTop: 8 }}>
             Reconstruct run state from the persisted JSONL event log.

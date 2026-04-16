@@ -101,8 +101,26 @@ describe("CaseListPage", () => {
     render(<CaseListPage onSelectCase={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Failed to load cases")).toBeInTheDocument();
-      expect(screen.getByText(/GET \/cases failed/)).toBeInTheDocument();
+      expect(screen.getByText("Case queue unavailable")).toBeInTheDocument();
+      expect(screen.getByText(/Case queue unavailable \(500\)/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Retry case queue" })).toBeInTheDocument();
+    });
+  });
+
+  it("retries queue load after an initial fetch failure", async () => {
+    mockFetch.mockResolvedValueOnce(errorResponse(500));
+    render(<CaseListPage onSelectCase={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Retry case queue" })).toBeInTheDocument();
+    });
+
+    mockFetch.mockResolvedValueOnce(okResponse(fullCases));
+    await userEvent.click(screen.getByRole("button", { name: "Retry case queue" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("case-001")).toBeInTheDocument();
+      expect(screen.queryByText("Case queue unavailable")).not.toBeInTheDocument();
     });
   });
 
@@ -167,14 +185,18 @@ describe("CaseListPage", () => {
       expect(screen.getByText("case-001")).toBeInTheDocument();
     });
 
-    mockFetch.mockResolvedValueOnce(errorResponse(422));
+    mockFetch.mockResolvedValueOnce(
+      errorResponse(422, "Pipeline could not finish this review request")
+    );
 
     const buttons = screen.getAllByText("Run Review");
     await userEvent.click(buttons[0]);
 
     await waitFor(() => {
       // Error shown inline on the row (replaces summary text)
-      expect(screen.getByText(/POST \/runs failed/)).toBeInTheDocument();
+      expect(
+        screen.getByText("Pipeline could not finish this review request")
+      ).toBeInTheDocument();
     });
 
     // Other row still shows its summary unaffected

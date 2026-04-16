@@ -26,11 +26,6 @@ interface Props {
   onBack: () => void;
 }
 
-type MutationError = {
-  kind: "approve" | "replay";
-  message: string;
-};
-
 function describeError(error: unknown): string {
   if (error instanceof ApiError) {
     return error.detail ?? error.message;
@@ -106,14 +101,12 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetchNotFound, setFetchNotFound] = useState(false);
-  const [mutationError, setMutationError] = useState<MutationError | null>(null);
   const [activeQuote, setActiveQuote] = useState<{ doc_id: string; quote: string } | null>(null);
 
   const fetchRun = useCallback(() => {
     setLoading(true);
     setFetchError(null);
     setFetchNotFound(false);
-    setMutationError(null);
     setRun(null);
     setActiveQuote(null);
     getRun(runId)
@@ -136,25 +129,15 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
 
   const handleApprove = useCallback(
     async (draftText: string) => {
-      setMutationError(null);
-      try {
-        const updated = await postApprove(runId, draftText);
-        setRun(updated);
-      } catch (e) {
-        setMutationError({ kind: "approve", message: describeError(e) });
-      }
+      const updated = await postApprove(runId, draftText);
+      setRun(updated);
     },
     [runId]
   );
 
   const handleReplay = useCallback(async () => {
-    setMutationError(null);
-    try {
-      const replayed = await getReplay(runId);
-      setRun(replayed);
-    } catch (e) {
-      setMutationError({ kind: "replay", message: describeError(e) });
-    }
+    const replayed = await getReplay(runId);
+    setRun(replayed);
   }, [runId]);
 
   const handleEvidenceClick = useCallback((docId: string, quote: string) => {
@@ -288,7 +271,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
   const startedAt = run.events[0]?.timestamp ?? null;
   const lastEventAt =
     run.events.length > 0 ? run.events[run.events.length - 1].timestamp : null;
-  const panelHeight = isEscalated || mutationError ? "min(64vh, 760px)" : "min(68vh, 820px)";
+  const panelHeight = isEscalated ? "min(64vh, 760px)" : "min(68vh, 820px)";
 
   return (
     <WorkbenchScreen fullHeight maxWidth={1480}>
@@ -349,33 +332,6 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
           </WorkbenchNotice>
         )}
 
-        {mutationError ? (
-          <WorkbenchNotice
-            title={
-              mutationError.kind === "approve"
-                ? "Approval did not complete"
-                : "Replay did not complete"
-            }
-            tone="danger"
-          >
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-              <span>
-                {mutationError.kind === "approve"
-                  ? "The current draft and run state are still on screen. Review the text and try approving again if needed."
-                  : "The live run remains on screen. Retry replay if you still need a reconstructed view."}
-                <div style={{ marginTop: 6 }}>{mutationError.message}</div>
-              </span>
-              <WorkbenchButton
-                onClick={() => setMutationError(null)}
-                size="sm"
-                variant="ghost"
-              >
-                Dismiss
-              </WorkbenchButton>
-            </div>
-          </WorkbenchNotice>
-        ) : null}
-
         <WorkbenchPaneGrid testId="run-workspace-grid">
           <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
             <DocumentPanel
@@ -400,6 +356,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
                   findings={run.findings}
                   status={run.status}
                   onApprove={handleApprove}
+                  onRefresh={fetchRun}
                 />
               </>
             ) : null}

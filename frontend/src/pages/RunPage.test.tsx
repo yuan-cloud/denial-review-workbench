@@ -205,11 +205,12 @@ describe("RunPage", () => {
       // Mutation error shown inline
       expect(screen.getByText("Approval did not complete")).toBeInTheDocument();
       expect(
-        screen.getByText(/The current draft and run state are still on screen/)
+        screen.getByText(/The drafted text is still in place/)
       ).toBeInTheDocument();
       expect(screen.getByText(/Already approved/)).toBeInTheDocument();
       // Run data still visible — not wiped
       expect(screen.getByText("Acme")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Reload run" })).toBeInTheDocument();
       // Dismiss button present
       expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
     });
@@ -253,11 +254,12 @@ describe("RunPage", () => {
     await waitFor(() => {
       expect(screen.getByText("Replay did not complete")).toBeInTheDocument();
       expect(
-        screen.getByText(/The live run remains on screen/)
+        screen.getByText(/The live run stays on screen/)
       ).toBeInTheDocument();
       expect(screen.getByText(/Replay unavailable/)).toBeInTheDocument();
       // Run data preserved
       expect(screen.getByText("Acme")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Retry replay" })).toBeInTheDocument();
     });
   });
 
