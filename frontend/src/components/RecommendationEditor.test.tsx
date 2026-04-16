@@ -92,11 +92,11 @@ describe("RecommendationEditor", () => {
         onApprove={() => {}}
       />
     );
-    expect(screen.getByText(/Approved/)).toBeInTheDocument();
+    expect(screen.getByText("Approved ✓")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
 
-  it("disables textarea when approved", () => {
+  it("shows final text as read-only field when approved", () => {
     render(
       <RecommendationEditor
         recommendation={baseRec}
@@ -105,7 +105,9 @@ describe("RecommendationEditor", () => {
         onApprove={() => {}}
       />
     );
-    expect(screen.getByRole("textbox")).toBeDisabled();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByText("Final Text")).toBeInTheDocument();
+    expect(screen.getByText("Approve this case.")).toBeInTheDocument();
   });
 
   it("renders escalation notice when should_escalate is true", () => {

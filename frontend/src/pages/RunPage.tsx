@@ -22,30 +22,43 @@ interface Props {
   onBack: () => void;
 }
 
+type MutationError = {
+  kind: "approve" | "replay";
+  message: string;
+};
+
+function describeError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.detail ?? error.message;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function RunPage({ caseId, runId, onBack }: Props) {
   const [run, setRun] = useState<RunStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetchNotFound, setFetchNotFound] = useState(false);
-  const [mutationError, setMutationError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<MutationError | null>(null);
   const [activeQuote, setActiveQuote] = useState<{ doc_id: string; quote: string } | null>(null);
 
   const fetchRun = useCallback(() => {
     setLoading(true);
     setFetchError(null);
     setFetchNotFound(false);
+    setMutationError(null);
+    setRun(null);
+    setActiveQuote(null);
     getRun(runId)
       .then((data) => {
         setRun(data);
         setLoading(false);
       })
-      .catch((e) => {
-        if (e instanceof ApiError && e.status === 404) {
+      .catch((error) => {
+        if (error instanceof ApiError && error.status === 404) {
           setFetchNotFound(true);
-          setFetchError(e.detail ?? e.message);
-        } else {
-          setFetchError(e instanceof Error ? e.message : String(e));
         }
+        setFetchError(describeError(error));
         setLoading(false);
       });
   }, [runId]);
@@ -61,7 +74,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
         const updated = await postApprove(runId, draftText);
         setRun(updated);
       } catch (e) {
-        setMutationError(e instanceof Error ? e.message : String(e));
+        setMutationError({ kind: "approve", message: describeError(e) });
       }
     },
     [runId]
@@ -73,7 +86,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
       const replayed = await getReplay(runId);
       setRun(replayed);
     } catch (e) {
-      setMutationError(e instanceof Error ? e.message : String(e));
+      setMutationError({ kind: "replay", message: describeError(e) });
     }
   }, [runId]);
 
@@ -85,21 +98,25 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
   const isEscalated = run?.status === "escalated";
 
   const statusTone =
-    run?.status === "approved"
-      ? "success"
-      : isEscalated
-        ? "danger"
-        : run
-          ? "primary"
-          : loading
-            ? "neutral"
+    fetchError && !run
+      ? fetchNotFound
+        ? "warning"
+        : "danger"
+      : run?.status === "approved"
+        ? "success"
+        : isEscalated
+          ? "danger"
+          : run
+            ? "primary"
             : "neutral";
 
   const statusLabel = run
     ? run.status.replace(/_/g, " ")
     : loading
       ? "loading"
-      : "error";
+      : fetchNotFound
+        ? "not found"
+        : "load failed";
 
   const pageHeader = (
     <WorkbenchPageHeader
@@ -117,29 +134,61 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
     />
   );
 
-  // Fetch error — workspace not loaded, show error with retry
-  if (fetchError && !run) {
+  // Loading or fetch error — show status screen with retry
+  if (loading || (fetchError && !run)) {
+    const title = loading
+      ? "Loading run"
+      : fetchNotFound
+        ? "Run not found"
+        : "Unable to load run";
+    const tone = loading ? "primary" : fetchNotFound ? "warning" : "danger";
+
     return (
-      <WorkbenchScreen>
+      <WorkbenchScreen fullHeight maxWidth={1400}>
         <div style={{ display: "grid", gap: 16 }}>
           {pageHeader}
-          <WorkbenchNotice
-            title={fetchNotFound ? "Run not found" : "Failed to load run"}
-            tone="danger"
-          >
-            <p style={{ margin: "0 0 10px" }}>{fetchError}</p>
-            <WorkbenchActionBar>
-              <WorkbenchButton onClick={fetchRun} size="sm">
-                Retry
-              </WorkbenchButton>
-              <WorkbenchButton onClick={onBack} size="sm" variant="ghost">
-                &larr; Back to cases
-              </WorkbenchButton>
-            </WorkbenchActionBar>
-          </WorkbenchNotice>
+          <WorkbenchPanel>
+            <div style={{ display: "grid", gap: 14, minHeight: 280, alignContent: "start" }}>
+              <WorkbenchNotice title={title} tone={tone}>
+                {loading ? (
+                  <>
+                    Fetching documents, analysis, and audit history for{" "}
+                    <strong>{runId}</strong>. This does not start a new review.
+                  </>
+                ) : fetchNotFound ? (
+                  <>
+                    Run <strong>{runId}</strong> is not available right now. Retry fetch.
+                    If it stays missing, go back to the case list and start the review again.
+                    {fetchError ? <div style={{ marginTop: 6 }}>{fetchError}</div> : null}
+                  </>
+                ) : (
+                  <>
+                    The workspace could not load <strong>{runId}</strong>. Check the
+                    backend connection and retry.
+                    {fetchError ? <div style={{ marginTop: 6 }}>{fetchError}</div> : null}
+                  </>
+                )}
+              </WorkbenchNotice>
+
+              {!loading ? (
+                <WorkbenchActionBar>
+                  <WorkbenchButton onClick={fetchRun} size="sm" variant="primary">
+                    Retry fetch
+                  </WorkbenchButton>
+                  <WorkbenchButton onClick={onBack} size="sm" variant="ghost">
+                    &larr; Back to case list
+                  </WorkbenchButton>
+                </WorkbenchActionBar>
+              ) : null}
+            </div>
+          </WorkbenchPanel>
         </div>
       </WorkbenchScreen>
     );
+  }
+
+  if (!run) {
+    return null;
   }
 
   return (
@@ -162,9 +211,21 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
         )}
 
         {mutationError ? (
-          <WorkbenchNotice title="Action failed" tone="warning">
+          <WorkbenchNotice
+            title={
+              mutationError.kind === "approve"
+                ? "Approval did not complete"
+                : "Replay did not complete"
+            }
+            tone="danger"
+          >
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-              <span>{mutationError}</span>
+              <span>
+                {mutationError.kind === "approve"
+                  ? "The current draft and run state are still on screen. Review the text and try approving again if needed."
+                  : "The live run remains on screen. Retry replay if you still need a reconstructed view."}
+                <div style={{ marginTop: 6 }}>{mutationError.message}</div>
+              </span>
               <WorkbenchButton
                 onClick={() => setMutationError(null)}
                 size="sm"
@@ -187,17 +248,15 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
         >
           <WorkbenchPanel style={{ minHeight: 0 }}>
             <DocumentPanel
-              documents={run?.documents ?? []}
-              retrievedPolicySections={run?.retrieved_policy_sections ?? []}
-              facilityId={run?.facility_id ?? ""}
+              documents={run.documents}
+              retrievedPolicySections={run.retrieved_policy_sections}
+              facilityId={run.facility_id}
               activeQuote={activeQuote}
             />
           </WorkbenchPanel>
 
           <WorkbenchPanel style={{ minHeight: 0 }}>
-            {loading ? (
-              <WorkbenchNotice>Loading run data…</WorkbenchNotice>
-            ) : run ? (
+            {run ? (
               <>
                 <FactCards facts={run.facts} onEvidenceClick={handleEvidenceClick} />
                 <GapAnalysisTable
@@ -217,8 +276,8 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
 
           <WorkbenchPanel style={{ minHeight: 0 }}>
             <RunHistoryPanel
-              events={run?.events ?? []}
-              isReplayResponse={run?.is_replay_response ?? false}
+              events={run.events}
+              isReplayResponse={run.is_replay_response}
               onReplay={handleReplay}
             />
           </WorkbenchPanel>

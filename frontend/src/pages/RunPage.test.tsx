@@ -77,7 +77,11 @@ describe("RunPage", () => {
     mockFetch.mockReturnValueOnce(new Promise(() => {}));
     render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
 
-    expect(screen.getByText(/Loading run data/)).toBeInTheDocument();
+    expect(screen.getByText("Loading run")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Fetching documents, analysis, and audit history/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Click Run Review to start.")).not.toBeInTheDocument();
   });
 
   it("shows fetch error with retry button on non-404 failure", async () => {
@@ -85,8 +89,9 @@ describe("RunPage", () => {
     render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Failed to load run")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+      expect(screen.getByText("Unable to load run")).toBeInTheDocument();
+      expect(screen.getByText(/The workspace could not load/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Retry fetch" })).toBeInTheDocument();
     });
   });
 
@@ -98,6 +103,7 @@ describe("RunPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Run not found")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Retry fetch" })).toBeInTheDocument();
       expect(screen.getByText(/No persisted event log exists/)).toBeInTheDocument();
     });
   });
@@ -107,12 +113,12 @@ describe("RunPage", () => {
     render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Retry fetch" })).toBeInTheDocument();
     });
 
     // Retry succeeds
     mockFetch.mockResolvedValueOnce(okResponse(baseRun));
-    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await userEvent.click(screen.getByRole("button", { name: "Retry fetch" }));
 
     await waitFor(() => {
       expect(screen.getByText("Acme")).toBeInTheDocument();
@@ -163,7 +169,7 @@ describe("RunPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Approve" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Approved/)).toBeInTheDocument();
+      expect(screen.getByText("Approved ✓")).toBeInTheDocument();
     });
   });
 
@@ -182,7 +188,10 @@ describe("RunPage", () => {
 
     await waitFor(() => {
       // Mutation error shown inline
-      expect(screen.getByText("Action failed")).toBeInTheDocument();
+      expect(screen.getByText("Approval did not complete")).toBeInTheDocument();
+      expect(
+        screen.getByText(/The current draft and run state are still on screen/)
+      ).toBeInTheDocument();
       expect(screen.getByText(/Already approved/)).toBeInTheDocument();
       // Run data still visible — not wiped
       expect(screen.getByText("Acme")).toBeInTheDocument();
@@ -203,13 +212,13 @@ describe("RunPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Approve" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Action failed")).toBeInTheDocument();
+      expect(screen.getByText("Approval did not complete")).toBeInTheDocument();
     });
 
     await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
 
     await waitFor(() => {
-      expect(screen.queryByText("Action failed")).not.toBeInTheDocument();
+      expect(screen.queryByText("Approval did not complete")).not.toBeInTheDocument();
     });
   });
 
@@ -227,7 +236,10 @@ describe("RunPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Replay" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Action failed")).toBeInTheDocument();
+      expect(screen.getByText("Replay did not complete")).toBeInTheDocument();
+      expect(
+        screen.getByText(/The live run remains on screen/)
+      ).toBeInTheDocument();
       expect(screen.getByText(/Replay unavailable/)).toBeInTheDocument();
       // Run data preserved
       expect(screen.getByText("Acme")).toBeInTheDocument();
