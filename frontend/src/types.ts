@@ -54,4 +54,8 @@ export interface RunStatus {
 
 export interface CaseListItem {
   case_id: string;
+  facility_id: string;
+  scenario_title: string;
+  expected_path_type: "approval" | "missing_documents" | "escalation";
+  summary: string;
 }

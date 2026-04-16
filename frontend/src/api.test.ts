@@ -38,7 +38,22 @@ describe("resolveApiBase", () => {
 
 describe("getCases", () => {
   it("fetches /cases and returns list", async () => {
-    const data = [{ case_id: "case-001" }, { case_id: "case-002" }];
+    const data = [
+      {
+        case_id: "case-001",
+        facility_id: "facility-a",
+        scenario_title: "Authorization already approved",
+        expected_path_type: "approval",
+        summary: "Happy-path packet with all required documentation present.",
+      },
+      {
+        case_id: "case-002",
+        facility_id: "facility-a",
+        scenario_title: "Missing supporting documentation",
+        expected_path_type: "missing_documents",
+        summary: "Signed physician order missing and progress notes are stale.",
+      },
+    ];
     mockFetch.mockResolvedValueOnce(okResponse(data));
 
     const result = await getCases();

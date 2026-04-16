@@ -39,6 +39,10 @@ class TestCasesEndpoint:
         assert isinstance(data, list)
         assert len(data) == 3
         assert all("case_id" in c for c in data)
+        assert all("facility_id" in c for c in data)
+        assert all("scenario_title" in c for c in data)
+        assert all("expected_path_type" in c for c in data)
+        assert all("summary" in c for c in data)
 
     def test_cases_includes_expected_ids(self, client):
         resp = client.get("/cases")
@@ -46,6 +50,21 @@ class TestCasesEndpoint:
         assert "case-001" in ids
         assert "case-002" in ids
         assert "case-003" in ids
+
+    def test_cases_returns_operator_metadata(self, client):
+        resp = client.get("/cases")
+        assert resp.status_code == 200
+        items = {item["case_id"]: item for item in resp.json()}
+
+        assert items["case-001"]["facility_id"] == "facility-a"
+        assert items["case-001"]["expected_path_type"] == "approval"
+        assert "approved" in items["case-001"]["scenario_title"].lower()
+
+        assert items["case-002"]["expected_path_type"] == "missing_documents"
+        assert "physician order" in items["case-002"]["summary"].lower()
+
+        assert items["case-003"]["expected_path_type"] == "escalation"
+        assert "conflicting" in items["case-003"]["scenario_title"].lower()
 
 
 class TestGetRunEndpoint:
@@ -61,6 +80,16 @@ class TestGetRunEndpoint:
     def test_get_run_not_found(self, client):
         resp = client.get("/runs/nonexistent-run-id")
         assert resp.status_code == 404
+        assert "no persisted event log exists" in resp.json()["detail"].lower()
+
+    def test_get_run_not_found_with_empty_jsonl_explains_reconstruction_failure(
+        self, client, tmp_runs
+    ):
+        (tmp_runs / "empty-run.jsonl").write_text("", encoding="utf-8")
+
+        resp = client.get("/runs/empty-run")
+        assert resp.status_code == 404
+        assert "contains no reconstructible events" in resp.json()["detail"].lower()
 
     def test_get_run_from_state(self, client):
         state.seed("test-run-1", {
@@ -131,6 +160,7 @@ class TestApproveEndpoint:
     def test_approve_not_found(self, client):
         resp = client.post("/runs/nonexistent/approve", json={})
         assert resp.status_code == 404
+        assert "re-open or rerun" in resp.json()["detail"].lower()
 
     def test_approve_escalated_409(self, client):
         state.seed("run-esc", {
@@ -159,11 +189,39 @@ class TestApproveEndpoint:
         assert resp.status_code == 409
         assert "already approved" in resp.json()["detail"].lower()
 
+    def test_approve_without_draft_recommendation_returns_explicit_409(self, client):
+        state.seed("run-no-draft", {
+            "run_id": "run-no-draft",
+            "case_id": "case-001",
+            "facility_id": "fac-1",
+            "status": "approval_requested",
+            "documents": [],
+            "retrieved_policy_sections": [],
+            "facts": None,
+            "findings": {"missing_items": [], "conflicts": [], "appeal_basis": None,
+                         "should_escalate": False, "evidence_refs": []},
+            "recommendation": None,
+            "events": [],
+        })
+
+        resp = client.post("/runs/run-no-draft/approve", json={})
+        assert resp.status_code == 409
+        assert "no draft recommendation" in resp.json()["detail"].lower()
+
 
 class TestReplayEndpoint:
     def test_replay_not_found(self, client):
         resp = client.get("/runs/nonexistent/replay")
         assert resp.status_code == 404
+        assert "replay unavailable" in resp.json()["detail"].lower()
+        assert "no persisted event log exists" in resp.json()["detail"].lower()
+
+    def test_replay_not_found_with_empty_jsonl_mentions_reconstruction(self, client, tmp_runs):
+        (tmp_runs / "empty-replay.jsonl").write_text("", encoding="utf-8")
+
+        resp = client.get("/runs/empty-replay/replay")
+        assert resp.status_code == 404
+        assert "contains no reconstructible events" in resp.json()["detail"].lower()
 
     def test_replay_falls_back_to_state(self, client):
         state.seed("run-replay-test", {
@@ -195,6 +253,7 @@ class TestDemoFallbackEndpoint:
     def test_demo_fallback_missing_case(self, client):
         resp = client.get("/demo-fallback/case-999")
         assert resp.status_code == 404
+        assert "unknown fallback case_id" in resp.json()["detail"].lower()
 
 
 class TestLifespan:

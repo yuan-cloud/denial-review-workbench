@@ -37,6 +37,14 @@ class Recommendation(BaseModel):
     draft_text: str
 
 
+class CaseListItem(BaseModel):
+    case_id: str
+    facility_id: str
+    scenario_title: str
+    expected_path_type: Literal["approval", "missing_documents", "escalation"]
+    summary: str
+
+
 class RunCreateRequest(BaseModel):
     case_id: str
 

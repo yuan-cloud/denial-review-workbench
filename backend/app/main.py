@@ -10,10 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import state
 from app.errors import PipelineError
-from app.event_store import append_event, read_events
+from app.event_store import append_event, read_events, run_exists
 from app.pipeline import run_pipeline
 from app.replay import replay_run
-from app.schemas import ApproveRequest, RunCreateRequest, RunStatus
+from app.schemas import CaseListItem, ApproveRequest, RunCreateRequest, RunStatus
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,87 @@ CURRENT_PHASE = "3"
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5274")
 
 VALID_CASE_IDS = ["case-001", "case-002", "case-003"]
+CASE_QUEUE_METADATA = {
+    "case-001": {
+        "scenario_title": "Authorization already approved",
+        "expected_path_type": "approval",
+        "summary": (
+            "Happy-path packet with all required documentation present for a "
+            "skilled nursing follow-up request."
+        ),
+    },
+    "case-002": {
+        "scenario_title": "Missing supporting documentation",
+        "expected_path_type": "missing_documents",
+        "summary": (
+            "Denial cites a missing signed physician order and progress notes "
+            "outside the 30-day window."
+        ),
+    },
+    "case-003": {
+        "scenario_title": "Conflicting denial reasons",
+        "expected_path_type": "escalation",
+        "summary": (
+            "Medical-necessity and documentation issues conflict, so the case "
+            "should escalate instead of drafting an appeal."
+        ),
+    },
+}
+
+
+def _load_case_meta(case_id: str) -> dict:
+    meta_path = DATA_DIR / "cases" / case_id / "meta.json"
+    if not meta_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Case metadata missing for {case_id}: meta.json not found.",
+        )
+    try:
+        with open(meta_path, encoding="utf-8") as f:
+            meta = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Case metadata for {case_id} is invalid JSON.",
+        ) from exc
+
+    facility_id = meta.get("facility_id")
+    if not isinstance(facility_id, str) or not facility_id.strip():
+        raise HTTPException(
+            status_code=500,
+            detail=f"Case metadata for {case_id} is missing facility_id.",
+        )
+    return meta
+
+
+def _build_case_list_item(case_id: str) -> CaseListItem:
+    queue_metadata = CASE_QUEUE_METADATA.get(case_id)
+    if queue_metadata is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Queue metadata is not configured for {case_id}.",
+        )
+
+    meta = _load_case_meta(case_id)
+    return CaseListItem(
+        case_id=case_id,
+        facility_id=meta["facility_id"],
+        scenario_title=queue_metadata["scenario_title"],
+        expected_path_type=queue_metadata["expected_path_type"],
+        summary=queue_metadata["summary"],
+    )
+
+
+def _missing_run_detail(run_id: str) -> str:
+    if run_exists(run_id):
+        return (
+            f"Run {run_id} has a persisted event log, but it contains no "
+            "reconstructible events and no in-memory state is loaded."
+        )
+    return (
+        f"Run {run_id} was not found in memory and no persisted event log "
+        "exists for reconstruction."
+    )
 
 
 @asynccontextmanager
@@ -54,9 +135,9 @@ def get_health():
     return {"status": "ok", "phase": CURRENT_PHASE}
 
 
-@app.get("/cases")
+@app.get("/cases", response_model=list[CaseListItem])
 def get_cases():
-    return [{"case_id": cid} for cid in VALID_CASE_IDS]
+    return [_build_case_list_item(case_id) for case_id in VALID_CASE_IDS]
 
 
 @app.post("/runs", status_code=201)
@@ -64,12 +145,7 @@ def post_runs(body: RunCreateRequest):
     if body.case_id not in VALID_CASE_IDS:
         raise HTTPException(status_code=404, detail=f"Unknown case_id: {body.case_id}")
 
-    meta_path = DATA_DIR / "cases" / body.case_id / "meta.json"
-    if not meta_path.exists():
-        raise HTTPException(status_code=404, detail="meta.json not found")
-
-    with open(meta_path, encoding="utf-8") as f:
-        facility_id = json.load(f)["facility_id"]
+    facility_id = _load_case_meta(body.case_id)["facility_id"]
 
     try:
         result = run_pipeline(body.case_id, facility_id)
@@ -88,16 +164,27 @@ def get_run(run_id: str):
         return RunStatus.model_validate(state_dict)
     result = replay_run(run_id)
     if result is None:
-        raise HTTPException(status_code=404)
-    result.is_replay_response = False
-    return result
+        raise HTTPException(status_code=404, detail=_missing_run_detail(run_id))
+    return result.model_copy(update={"is_replay_response": False})
 
 
 @app.post("/runs/{run_id}/approve")
 def post_approve(run_id: str, body: ApproveRequest = None):
     state_dict = state.get(run_id)
     if state_dict is None:
-        raise HTTPException(status_code=404)
+        detail = (
+            f"Run {run_id} is not loaded in memory. Re-open or rerun the "
+            "case before approving it."
+        )
+        if run_exists(run_id):
+            detail = (
+                f"Run {run_id} only exists in the persisted audit trail right "
+                "now. Rerun the case before approving it."
+            )
+        raise HTTPException(
+            status_code=404,
+            detail=detail,
+        )
     if state_dict["status"] == "escalated":
         raise HTTPException(status_code=409, detail="Cannot approve an escalated run")
     if state_dict["status"] == "approved":
@@ -106,6 +193,11 @@ def post_approve(run_id: str, body: ApproveRequest = None):
         raise HTTPException(status_code=409, detail="Run already approved")
 
     existing = state_dict["recommendation"]
+    if existing is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Run {run_id} has no draft recommendation to approve.",
+        )
     final_recommendation = {
         "action_type": existing["action_type"],
         "rationale": existing["rationale"],
@@ -127,9 +219,9 @@ def post_approve(run_id: str, body: ApproveRequest = None):
     append_event(run_id, "approved", {"final_recommendation": final_recommendation},
                  timestamp=ts)
 
-    result = RunStatus.model_validate(state_dict)
-    result.is_replay_response = False
-    return result
+    return RunStatus.model_validate(state_dict).model_copy(
+        update={"is_replay_response": False}
+    )
 
 
 @app.get("/runs/{run_id}/replay")
@@ -139,21 +231,42 @@ def get_replay(run_id: str):
         return result
     state_dict = state.get(run_id)
     if state_dict is None:
-        raise HTTPException(status_code=404)
-    result = RunStatus.model_validate(state_dict)
-    result.is_replay_response = True
-    return result
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Replay unavailable for {run_id}. {_missing_run_detail(run_id)}"
+            ),
+        )
+    return RunStatus.model_validate(state_dict).model_copy(
+        update={"is_replay_response": True}
+    )
 
 
 @app.get("/demo-fallback/{case_id}")
 def get_demo_fallback(case_id: str):
+    if case_id not in VALID_CASE_IDS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown fallback case_id: {case_id}",
+        )
     path = DATA_DIR / "cases" / case_id / "saved_demo_run.json"
     if not path.exists():
         raise HTTPException(
             status_code=404,
-            detail=f"saved_demo_run.json missing for {case_id}. "
-                   "Run: cp data/cases/case-002/mock_run.json "
-                   "data/cases/case-002/saved_demo_run.json",
+            detail=(
+                f"Saved fallback run is missing for {case_id}. Run: cp "
+                "data/cases/case-002/mock_run.json "
+                "data/cases/case-002/saved_demo_run.json"
+            ),
         )
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Saved fallback run for {case_id} is invalid JSON. Recopy "
+                "saved_demo_run.json from mock_run.json before using this route."
+            ),
+        ) from exc

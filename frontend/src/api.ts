@@ -1,4 +1,4 @@
-import type { RunStatus } from "./types";
+import type { CaseListItem, RunStatus } from "./types";
 
 const DEFAULT_API_BASE = "http://localhost:8000";
 
@@ -102,8 +102,8 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function getCases(): Promise<{ case_id: string }[]> {
-  return requestJson<{ case_id: string }[]>("/cases");
+export async function getCases(): Promise<CaseListItem[]> {
+  return requestJson<CaseListItem[]>("/cases");
 }
 
 export async function getRun(runId: string): Promise<RunStatus> {
