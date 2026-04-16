@@ -28,35 +28,35 @@ case-003 demonstrates the escalation branch: conflicting denial reasons trigger 
 
 ## Screenshots
 
-### Case List
-Three synthetic cases with distinct review paths: happy path, missing docs, escalation.
+### Case Queue
+The triage queue lists all cases with facility, scenario, expected path, and summary columns. Reviewers pick a case and click **Run Review** to start the pipeline.
 
-![Case List](docs/screenshots/01-case-list.png)
+![Triage queue showing three synthetic cases — case-001 (approval path), case-002 (missing documents), case-003 (escalation) — with facility, scenario, path, and summary columns](docs/screenshots/01-case-list.png)
 
 ### Run Results — Three-Panel Layout
-Left: denial letter, auth request, clinical notes, policy excerpt. Center: extracted facts, gap analysis, editable recommendation. Right: event timeline.
+A persistent summary header shows status, facility, confidence, missing-item count, and start time. Left panel: denial letter, auth request, clinical notes, and retrieved policy excerpts. Center panel: extracted facts with color-banded confidence, gap analysis table, and editable recommendation. Right panel: event timeline.
 
-![Run Results](docs/screenshots/02-run-results.png)
+![Three-panel run results for case-002 showing Approval Requested status at 95% confidence, documents with policy excerpts on the left, extracted facts and gap analysis in the center, and the full event timeline on the right](docs/screenshots/02-run-results.png)
 
 ### Evidence Highlight
-Clicking an evidence reference highlights the source quote in the document panel.
+Clicking an evidence reference scrolls to the cited document and highlights the source quote with a yellow marker. An "Evidence focus" badge on the document confirms which source is active.
 
-![Evidence Highlight](docs/screenshots/03-evidence-highlight.png)
+![Evidence highlight view with the Denial Letter section active, showing a yellow-highlighted quote and an Evidence Focus badge on the document card](docs/screenshots/03-evidence-highlight.png)
 
 ### After Approve
-Reviewer edits draft text and clicks Approve. Badge confirms `approved` status; textarea is locked.
+The reviewer edits the draft text and clicks **Approve**. The status transitions to `approved`, the textarea locks into a read-only "Final Text" display, and the event timeline gains an "Approved" entry.
 
-![After Approve](docs/screenshots/04-after-approve.png)
+![Approved state for case-002 with green Approved badge, locked final recommendation text, and the complete event timeline showing all pipeline stages through approval](docs/screenshots/04-after-approve.png)
 
 ### Replay
-Deterministic reconstruction from JSONL log — no model call. Amber REPLAY badge confirms read-only state.
+Clicking **Replay** reconstructs the full run state from the JSONL event log — no model call is made. An amber REPLAY badge confirms the view is a read-only reconstruction.
 
-![Replay](docs/screenshots/05-replay.png)
+![Replay mode for case-002 showing the same approved state reconstructed from the JSONL audit log, with an amber REPLAY badge in the run history panel](docs/screenshots/05-replay.png)
 
 ### Escalation (case-003)
-Conflicting denial reasons trigger escalation. Draft and Approve UI suppressed; escalation notice shown.
+Conflicting denial reasons trigger `should_escalate: true`. A red banner blocks the workflow — no draft is generated, no Approve button is shown. The server enforces this with a 409 guard on the approve endpoint.
 
-![Escalation](docs/screenshots/06-escalation.png)
+![Escalation view for case-003 with a red Case Escalated — Workflow Blocked banner, suppressed approval controls, 72% confidence, and 1 conflict flagged in the gap analysis](docs/screenshots/06-escalation.png)
 
 ---
 
