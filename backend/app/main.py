@@ -25,32 +25,8 @@ CURRENT_PHASE = "3"
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5274")
 
 VALID_CASE_IDS = ["case-001", "case-002", "case-003"]
-CASE_QUEUE_METADATA = {
-    "case-001": {
-        "scenario_title": "Authorization already approved",
-        "expected_path_type": "approval",
-        "summary": (
-            "Happy-path packet with all required documentation present for a "
-            "skilled nursing follow-up request."
-        ),
-    },
-    "case-002": {
-        "scenario_title": "Missing supporting documentation",
-        "expected_path_type": "missing_documents",
-        "summary": (
-            "Denial cites a missing signed physician order and progress notes "
-            "outside the 30-day window."
-        ),
-    },
-    "case-003": {
-        "scenario_title": "Conflicting denial reasons",
-        "expected_path_type": "escalation",
-        "summary": (
-            "Medical-necessity and documentation issues conflict, so the case "
-            "should escalate instead of drafting an appeal."
-        ),
-    },
-}
+
+REQUIRED_META_FIELDS = ["facility_id", "scenario_title", "expected_path_type", "summary"]
 
 
 def _load_case_meta(case_id: str) -> dict:
@@ -69,30 +45,24 @@ def _load_case_meta(case_id: str) -> dict:
             detail=f"Case metadata for {case_id} is invalid JSON.",
         ) from exc
 
-    facility_id = meta.get("facility_id")
-    if not isinstance(facility_id, str) or not facility_id.strip():
-        raise HTTPException(
-            status_code=500,
-            detail=f"Case metadata for {case_id} is missing facility_id.",
-        )
+    for field in REQUIRED_META_FIELDS:
+        value = meta.get(field)
+        if not isinstance(value, str) or not value.strip():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Case metadata for {case_id} is missing {field}.",
+            )
     return meta
 
 
 def _build_case_list_item(case_id: str) -> CaseListItem:
-    queue_metadata = CASE_QUEUE_METADATA.get(case_id)
-    if queue_metadata is None:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Queue metadata is not configured for {case_id}.",
-        )
-
     meta = _load_case_meta(case_id)
     return CaseListItem(
         case_id=case_id,
         facility_id=meta["facility_id"],
-        scenario_title=queue_metadata["scenario_title"],
-        expected_path_type=queue_metadata["expected_path_type"],
-        summary=queue_metadata["summary"],
+        scenario_title=meta["scenario_title"],
+        expected_path_type=meta["expected_path_type"],
+        summary=meta["summary"],
     )
 
 

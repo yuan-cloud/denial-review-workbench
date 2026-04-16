@@ -1,4 +1,7 @@
 {
   "case_id": "case-003",
-  "facility_id": "facility-a"
+  "facility_id": "facility-a",
+  "scenario_title": "Conflicting denial reasons",
+  "expected_path_type": "escalation",
+  "summary": "Medical-necessity and documentation issues conflict, so the case should escalate instead of drafting an appeal."
 }

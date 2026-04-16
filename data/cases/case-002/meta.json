@@ -1,4 +1,7 @@
 {
   "case_id": "case-002",
-  "facility_id": "facility-a"
+  "facility_id": "facility-a",
+  "scenario_title": "Missing supporting documentation",
+  "expected_path_type": "missing_documents",
+  "summary": "Denial cites a missing signed physician order and progress notes outside the 30-day window."
 }

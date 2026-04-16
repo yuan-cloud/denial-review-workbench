@@ -1,4 +1,7 @@
 {
   "case_id": "case-001",
-  "facility_id": "facility-a"
+  "facility_id": "facility-a",
+  "scenario_title": "Authorization already approved",
+  "expected_path_type": "approval",
+  "summary": "Happy-path packet with all required documentation present for a skilled nursing follow-up request."
 }
