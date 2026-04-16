@@ -31,7 +31,9 @@ const palette = {
 const BREAKPOINT_TABLET = "(max-width: 1099px)";
 const BREAKPOINT_MOBILE = "(max-width: 639px)";
 
-function useMediaQuery(query: string): boolean {
+export { BREAKPOINT_MOBILE };
+
+export function useMediaQuery(query: string): boolean {
   const supported =
     typeof window !== "undefined" && typeof window.matchMedia === "function";
 

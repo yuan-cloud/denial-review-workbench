@@ -7,6 +7,8 @@ import GapAnalysisTable from "../components/GapAnalysisTable";
 import RecommendationEditor from "../components/RecommendationEditor";
 import RunHistoryPanel from "../components/RunHistoryPanel";
 import {
+  BREAKPOINT_MOBILE,
+  useMediaQuery,
   WorkbenchActionBar,
   WorkbenchButton,
   WorkbenchNotice,
@@ -120,6 +122,8 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
   const [activeQuote, setActiveQuote] = useState<{ doc_id: string; quote: string } | null>(null);
   const [skipLinkFocused, setSkipLinkFocused] = useState(false);
   const [liveMessage, setLiveMessage] = useState("");
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const isMobile = useMediaQuery(BREAKPOINT_MOBILE);
   const reviewStateRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const previousStatusRef = useRef<RunStatus["status"] | null>(null);
@@ -384,15 +388,17 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
               label="Review state"
               value={titleCaseStatus(run.status)}
               tone={statusTone}
-              meta={`${workflowSummary} ${modeSummary}`}
+              meta={isMobile ? undefined : `${workflowSummary} ${modeSummary}`}
             />
           </div>
-          <WorkbenchSummaryItem
-            label="Facility pack"
-            value={run.facility_id}
-            valueStyle={workbenchStyles.mono}
-            meta={`${formatCount(run.documents.length, "document")} • ${formatCount(run.retrieved_policy_sections.length, "policy section")}`}
-          />
+          {(!isMobile || summaryExpanded) && (
+            <WorkbenchSummaryItem
+              label="Facility pack"
+              value={run.facility_id}
+              valueStyle={workbenchStyles.mono}
+              meta={`${formatCount(run.documents.length, "document")} • ${formatCount(run.retrieved_policy_sections.length, "policy section")}`}
+            />
+          )}
           <WorkbenchSummaryItem
             label="Confidence"
             value={confidenceView.value}
@@ -400,24 +406,52 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
             meta={
               confidence === null
                 ? "Facts have not been extracted yet."
-                : `${confidenceView.label} • ${run.facts?.payer ?? "payer unavailable"}`
+                : isMobile && !summaryExpanded
+                  ? confidenceView.label
+                  : `${confidenceView.label} • ${run.facts?.payer ?? "payer unavailable"}`
             }
           />
-          <WorkbenchSummaryItem
-            label="Gap status"
-            value={
-              isEscalated
-                ? formatCount(conflictCount || 1, "conflict")
-                : formatCount(missingCount, "missing item")
-            }
-            tone={isEscalated ? "danger" : missingCount > 0 ? "warning" : "success"}
-            meta={gapSummary}
-          />
-          <WorkbenchSummaryItem
-            label="Timeline"
-            value={`Started ${formatTimestamp(startedAt)}`}
-            meta={`Last event ${formatTimestamp(lastEventAt)}`}
-          />
+          {(!isMobile || summaryExpanded) && (
+            <>
+              <WorkbenchSummaryItem
+                label="Gap status"
+                value={
+                  isEscalated
+                    ? formatCount(conflictCount || 1, "conflict")
+                    : formatCount(missingCount, "missing item")
+                }
+                tone={isEscalated ? "danger" : missingCount > 0 ? "warning" : "success"}
+                meta={gapSummary}
+              />
+              <WorkbenchSummaryItem
+                label="Timeline"
+                value={`Started ${formatTimestamp(startedAt)}`}
+                meta={`Last event ${formatTimestamp(lastEventAt)}`}
+              />
+            </>
+          )}
+          {isMobile && (
+            <button
+              onClick={() => setSummaryExpanded((prev) => !prev)}
+              aria-expanded={summaryExpanded}
+              style={{
+                gridColumn: "1 / -1",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                padding: "6px 0",
+                background: "none",
+                border: "none",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#667085",
+                cursor: "pointer",
+              }}
+            >
+              {summaryExpanded ? "Hide details \u25B2" : "Show details \u25BC"}
+            </button>
+          )}
         </WorkbenchSummaryStrip>
 
         {loading || fetchError ? (
