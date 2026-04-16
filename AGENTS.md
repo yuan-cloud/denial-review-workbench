@@ -395,6 +395,20 @@ Never call `pipeline.py` functions from `replay.py`.
 Never call `anthropic_client.py` from `replay.py`.
 Never write any new events or files from `replay.py`.
 
+### is_replay_response is response metadata, never domain state
+
+Never persist it to JSONL. Never store it in `state.py`. Set it on return values using `model_copy`:
+
+```python
+return result.model_copy(update={"is_replay_response": False})
+```
+
+`model_copy` signals "response variant" not domain mutation. Direct attribute assignment is acceptable but `model_copy` is the project standard for this field.
+
+### Evidence highlighting uses two-stage match
+
+`DocumentPanel.tsx` implements exact `indexOf` first, case-insensitive `indexOf` fallback second. The fallback slices the original text at the match position to preserve source casing in the rendered `<mark>` element. This is intentional — model output does not always preserve source text capitalization.
+
 ### vite.config.ts must lock the port
 
 If Vite silently picks a different port, the CORS origin no longer matches and every API call fails with a CORS error. The UI freezes without explanation.
@@ -452,7 +466,13 @@ if state_dict["status"] == "escalated":
     raise HTTPException(status_code=409, detail="Cannot approve an escalated run")
 if state_dict["status"] == "approved":
     raise HTTPException(status_code=409, detail="Run already approved")
+
+# JSONL guard — survives server restart
+if any(e.get("type") == "approved" for e in read_events(run_id)):
+    raise HTTPException(status_code=409, detail="Run already approved")
 ```
+
+Note: in-memory guards are faster but not sufficient after restart. JSONL is the authoritative source for approval state.
 
 `final_recommendation.draft_text` must never be null. If the reviewer approves without editing, fall back to the existing draft value. Replay reads this field — null here breaks the replay panel.
 
@@ -463,6 +483,8 @@ if state_dict["status"] == "approved":
 Mock seeding happens once at POST /runs and on startup via the lifespan hook.
 All subsequent reads go through `state.get(run_id)`.
 Never re-read `mock_run.json` on GET — approval mutations will be invisible on refresh.
+
+Note (updated behavior): GET /runs checks state first. If state is missing (after restart), it falls back to `replay_run(run_id)` and returns the result with `is_replay_response: False` — because a GET /runs is not a replay request from the user's perspective. `replay_run()` sets `is_replay_response: True` by default, so the fallback path must explicitly override it.
 
 ---
 
@@ -496,6 +518,8 @@ Never use `print()` in any production path. `print()` does not appear in log agg
 ## UBS — BUG SCANNING BEFORE COMMITS
 
 Golden rule: run UBS on changed files before every commit. Exit 0 means safe. Exit >0 means fix and re-run.
+
+Run UBS per staged batch before each commit — not once at the end. If making multiple logical changes in one session, run `ubs --staged` before each `git commit`, not after staging all changes at once. This catches issues per logical group rather than letting a bad file contaminate a clean commit.
 
 ```bash
 ubs backend/app/pipeline.py            # specific file — USE THIS mid-edit
@@ -551,6 +575,15 @@ Protocol:
 2. Reference rule IDs when following them (e.g. "Following b-8f3a2c...").
 3. Leave inline comments when rules help or hurt: `# [cass: helpful b-xyz] - reason`
 4. End your session. Learning happens automatically.
+
+### Recording decisions
+
+```bash
+cm add "decision: <what and why>" --category decision --json
+cm add "architecture: <pattern>" --category architecture --json
+```
+
+Note: `cm record` is not a valid command. The correct command is `cm add` (alias for `cm playbook add`). For project-scoped entries run `cm init --repo` first, then use `cm playbook import --repo`.
 
 ---
 
