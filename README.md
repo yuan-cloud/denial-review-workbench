@@ -10,8 +10,6 @@ Denial review pipelines process a full case — extraction, gap analysis, draft 
 
 Denial Review Workbench is a thin, operator-ready workflow tool for reviewing insurance authorization denials. It ingests a case packet — denial letter, auth request, clinical notes — runs a structured AI pipeline to extract facts, identify missing documentation, and draft a next action, then routes the result to a human reviewer for approval or escalation. Every decision is logged to an append-only JSONL event store and can be replayed deterministically without touching the model.
 
-Processes insurance denial case packets through a three-step review pipeline and produces a human-approved action with a replayable audit trail.
-
 ---
 
 ## Demo Arc
@@ -134,8 +132,10 @@ cd denial-review-workbench
 **Backend:**
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+cp backend/.env.example backend/.env
+# add your Anthropic API key to backend/.env
 cd backend
+set -a; source .env; set +a
 pip install fastapi uvicorn anthropic pydantic
 uvicorn app.main:app --reload --port 8000
 ```
@@ -190,22 +190,9 @@ Returns the saved mock run for case-002 so you can inspect the Recommendation or
 
 ---
 
-## What This Is Not
-
-- Not a platform
-- Not an agent control room
-- Not HIPAA compliant
-- Not "denial management" (implies broader product scope)
-- Not the Agent Flywheel product
-
-One thin, legible, operator-ready workflow artifact. One flow. One knife.
-
----
-
 ## Build Methodology
 
-Built using the [Agent Flywheel](https://agent-flywheel.com) multi-agent development environment: NTM for agent orchestration, Agent Mail for coordination, Beads for task tracking, CASS for session search, and named Claude Code + Codex agents working in parallel from a shared AGENTS.md operating contract on a Contabo VPS.
-
+Built with multiple AI coding agents (Claude Code, Codex) working in parallel from a shared operating contract (`AGENTS.md`). Agents coordinate through message passing and file reservations, commit independently to `main`, and run automated bug scanning before every commit. Task graph, session search, and orchestration are scripted — no manual dispatch.
 
 ---
 
