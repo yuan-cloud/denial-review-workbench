@@ -14,6 +14,23 @@ function errorResponse(status: number) {
   return { ok: false, status, json: () => Promise.resolve({}) };
 }
 
+const fullCases = [
+  {
+    case_id: "case-001",
+    facility_id: "facility-a",
+    scenario_title: "Authorization already approved",
+    expected_path_type: "approval",
+    summary: "Happy-path packet with all documentation present.",
+  },
+  {
+    case_id: "case-002",
+    facility_id: "facility-a",
+    scenario_title: "Missing physician order",
+    expected_path_type: "missing_documents",
+    summary: "Packet missing a physician order for PT authorization.",
+  },
+];
+
 beforeEach(() => {
   mockFetch.mockReset();
 });
@@ -25,15 +42,33 @@ describe("CaseListPage", () => {
     expect(screen.getByText("Denial Review Workbench")).toBeInTheDocument();
   });
 
-  it("fetches and displays cases", async () => {
-    mockFetch.mockResolvedValueOnce(
-      okResponse([{ case_id: "case-001" }, { case_id: "case-002" }])
-    );
+  it("fetches and displays cases with metadata", async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(fullCases));
     render(<CaseListPage onSelectCase={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText("case-001")).toBeInTheDocument();
       expect(screen.getByText("case-002")).toBeInTheDocument();
+      // Metadata columns — both cases share facility-a
+      expect(screen.getAllByText("facility-a")).toHaveLength(2);
+      expect(screen.getByText("Authorization already approved")).toBeInTheDocument();
+      expect(screen.getByText("Missing physician order")).toBeInTheDocument();
+      expect(screen.getByText("Approval")).toBeInTheDocument();
+      expect(screen.getByText("Missing Docs")).toBeInTheDocument();
+    });
+  });
+
+  it("renders dense table header columns", async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(fullCases));
+    render(<CaseListPage onSelectCase={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Case")).toBeInTheDocument();
+      expect(screen.getByText("Facility")).toBeInTheDocument();
+      expect(screen.getByText("Scenario")).toBeInTheDocument();
+      expect(screen.getByText("Path")).toBeInTheDocument();
+      expect(screen.getByText("Summary")).toBeInTheDocument();
+      expect(screen.getByText("Action")).toBeInTheDocument();
     });
   });
 
@@ -48,9 +83,7 @@ describe("CaseListPage", () => {
 
   it("calls onSelectCase after successful run", async () => {
     const onSelectCase = vi.fn();
-    mockFetch.mockResolvedValueOnce(
-      okResponse([{ case_id: "case-001" }])
-    );
+    mockFetch.mockResolvedValueOnce(okResponse(fullCases));
 
     render(<CaseListPage onSelectCase={onSelectCase} />);
 
@@ -66,7 +99,9 @@ describe("CaseListPage", () => {
       })
     );
 
-    await userEvent.click(screen.getByText("Run Review"));
+    // Click the first Run Review button
+    const buttons = screen.getAllByText("Run Review");
+    await userEvent.click(buttons[0]);
 
     await waitFor(() => {
       expect(onSelectCase).toHaveBeenCalledWith("case-001", "run-1");
@@ -74,9 +109,7 @@ describe("CaseListPage", () => {
   });
 
   it("shows Analyzing state during run", async () => {
-    mockFetch.mockResolvedValueOnce(
-      okResponse([{ case_id: "case-001" }])
-    );
+    mockFetch.mockResolvedValueOnce(okResponse(fullCases));
 
     render(<CaseListPage onSelectCase={() => {}} />);
 
@@ -87,16 +120,15 @@ describe("CaseListPage", () => {
     // Make postRun hang
     mockFetch.mockReturnValueOnce(new Promise(() => {}));
 
-    await userEvent.click(screen.getByText("Run Review"));
+    const buttons = screen.getAllByText("Run Review");
+    await userEvent.click(buttons[0]);
 
     expect(screen.getByText("Analyzing...")).toBeInTheDocument();
     expect(screen.getByText(/Analyzing case/)).toBeInTheDocument();
   });
 
   it("shows error on run failure", async () => {
-    mockFetch.mockResolvedValueOnce(
-      okResponse([{ case_id: "case-001" }])
-    );
+    mockFetch.mockResolvedValueOnce(okResponse(fullCases));
 
     render(<CaseListPage onSelectCase={() => {}} />);
 
@@ -106,10 +138,20 @@ describe("CaseListPage", () => {
 
     mockFetch.mockResolvedValueOnce(errorResponse(422));
 
-    await userEvent.click(screen.getByText("Run Review"));
+    const buttons = screen.getAllByText("Run Review");
+    await userEvent.click(buttons[0]);
 
     await waitFor(() => {
       expect(screen.getByText(/POST \/runs failed/)).toBeInTheDocument();
+    });
+  });
+
+  it("shows case count in queue description", async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(fullCases));
+    render(<CaseListPage onSelectCase={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("2 cases available for review.")).toBeInTheDocument();
     });
   });
 });

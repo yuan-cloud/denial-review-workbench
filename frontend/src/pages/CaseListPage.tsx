@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { CaseListItem } from "../types";
 import { getCases, postRun } from "../api";
 import {
   WorkbenchButton,
@@ -11,12 +12,18 @@ import {
   workbenchStyles,
 } from "../ui/workbench";
 
+const pathTypeLabel: Record<string, { text: string; tone: "success" | "warning" | "danger" }> = {
+  approval: { text: "Approval", tone: "success" },
+  missing_documents: { text: "Missing Docs", tone: "warning" },
+  escalation: { text: "Escalation", tone: "danger" },
+};
+
 interface Props {
   onSelectCase: (caseId: string, runId: string) => void;
 }
 
 export default function CaseListPage({ onSelectCase }: Props) {
-  const [cases, setCases] = useState<{ case_id: string }[]>([]);
+  const [cases, setCases] = useState<CaseListItem[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,12 +44,12 @@ export default function CaseListPage({ onSelectCase }: Props) {
   }
 
   return (
-    <WorkbenchScreen maxWidth={1120}>
+    <WorkbenchScreen maxWidth={1320}>
       <div style={{ display: "grid", gap: 16 }}>
         <WorkbenchPageHeader
           eyebrow="Clinical ops workbench"
           title="Denial Review Workbench"
-          description="Select a case to review."
+          description="Triage queue — select a case to run denial review analysis."
           actions={
             loading ? (
               <WorkbenchStatusPill tone="primary">Run in progress</WorkbenchStatusPill>
@@ -59,40 +66,62 @@ export default function CaseListPage({ onSelectCase }: Props) {
         <WorkbenchPanel>
           <WorkbenchSectionHeading
             title="Case Queue"
-            description="Launch a denial review run for a synthetic case packet."
+            description={`${cases.length} cases available for review.`}
           />
 
           <table style={workbenchStyles.denseTable}>
             <thead>
               <tr style={workbenchStyles.denseTableHead}>
-                <th style={workbenchStyles.denseTableHeaderCell}>Case ID</th>
-                <th style={workbenchStyles.denseTableHeaderCell}>Action</th>
+                <th style={workbenchStyles.denseTableHeaderCell}>Case</th>
+                <th style={workbenchStyles.denseTableHeaderCell}>Facility</th>
+                <th style={workbenchStyles.denseTableHeaderCell}>Scenario</th>
+                <th style={workbenchStyles.denseTableHeaderCell}>Path</th>
+                <th style={workbenchStyles.denseTableHeaderCell}>Summary</th>
+                <th style={{ ...workbenchStyles.denseTableHeaderCell, textAlign: "right" }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {cases.map((c) => (
-                <tr key={c.case_id}>
-                  <td style={{ ...workbenchStyles.denseTableCell, ...workbenchStyles.mono }}>
-                    {c.case_id}
-                  </td>
-                  <td
-                    style={{
-                      ...workbenchStyles.denseTableCell,
-                      textAlign: "right",
-                      width: 140,
-                    }}
-                  >
-                    <WorkbenchButton
-                      onClick={() => handleRun(c.case_id)}
-                      disabled={loading !== null}
-                      variant="primary"
-                      size="sm"
+              {cases.map((c) => {
+                const pathInfo = pathTypeLabel[c.expected_path_type];
+                return (
+                  <tr key={c.case_id}>
+                    <td style={{ ...workbenchStyles.denseTableCell, ...workbenchStyles.mono, whiteSpace: "nowrap" }}>
+                      {c.case_id}
+                    </td>
+                    <td style={{ ...workbenchStyles.denseTableCell, ...workbenchStyles.mono, whiteSpace: "nowrap" }}>
+                      {c.facility_id}
+                    </td>
+                    <td style={{ ...workbenchStyles.denseTableCell, fontWeight: 600 }}>
+                      {c.scenario_title}
+                    </td>
+                    <td style={{ ...workbenchStyles.denseTableCell, whiteSpace: "nowrap" }}>
+                      {pathInfo ? (
+                        <WorkbenchStatusPill tone={pathInfo.tone}>{pathInfo.text}</WorkbenchStatusPill>
+                      ) : (
+                        c.expected_path_type
+                      )}
+                    </td>
+                    <td style={{ ...workbenchStyles.denseTableCell, ...workbenchStyles.subdued, maxWidth: 320 }}>
+                      {c.summary}
+                    </td>
+                    <td
+                      style={{
+                        ...workbenchStyles.denseTableCell,
+                        textAlign: "right",
+                        whiteSpace: "nowrap",
+                      }}
                     >
-                      {loading === c.case_id ? "Analyzing..." : "Run Review"}
-                    </WorkbenchButton>
-                  </td>
-                </tr>
-              ))}
+                      <WorkbenchButton
+                        onClick={() => handleRun(c.case_id)}
+                        disabled={loading !== null}
+                        size="sm"
+                      >
+                        {loading === c.case_id ? "Analyzing..." : "Run Review"}
+                      </WorkbenchButton>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
