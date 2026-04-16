@@ -1,6 +1,5 @@
 import type { CaseFacts } from "../types";
 import {
-  WorkbenchButton,
   WorkbenchField,
   WorkbenchSectionHeading,
   workbenchStyles,
@@ -21,6 +20,12 @@ function confidenceBg(confidence: number): string {
   if (confidence >= 0.8) return "#f0fdf4";
   if (confidence >= 0.7) return "#fefce8";
   return "#fef2f2";
+}
+
+function confidenceLabel(confidence: number): string {
+  if (confidence >= 0.8) return "High";
+  if (confidence >= 0.7) return "Medium";
+  return "Low";
 }
 
 export default function FactCards({ facts, onEvidenceClick }: Props) {
@@ -44,49 +49,58 @@ export default function FactCards({ facts, onEvidenceClick }: Props) {
           label="Confidence"
           style={{ background: confidenceBg(facts.confidence) }}
         >
-          <div
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: confidenceColor(facts.confidence),
-            }}
-          >
-            {pct}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: confidenceColor(facts.confidence),
+              }}
+            >
+              {pct}
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: confidenceColor(facts.confidence),
+              }}
+            >
+              {confidenceLabel(facts.confidence)}
+            </span>
           </div>
         </WorkbenchField>
       </div>
 
-      {facts.required_documents.length > 0 && (
-        <WorkbenchField label="Required Documents" style={{ marginBottom: 12 }}>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
-            {facts.required_documents.map((d, i) => (
-              <li key={i}>{d}</li>
-            ))}
-          </ul>
-        </WorkbenchField>
-      )}
-
       {facts.evidence_refs.length > 0 && (
-        <div>
-          <div style={{ ...workbenchStyles.label, marginBottom: 8 }}>Evidence</div>
-          {facts.evidence_refs.map((ref, i) => (
-            <WorkbenchButton
-              key={i}
-              onClick={() => onEvidenceClick(ref.doc_id, ref.quote)}
-              variant="secondary"
-              size="sm"
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                marginBottom: 4,
-                lineHeight: 1.45,
-                color: "#175cd3",
-              }}
-            >
-              <strong>{ref.doc_id}:</strong> "{ref.quote}"
-            </WorkbenchButton>
-          ))}
+        <div style={{ marginTop: 4 }}>
+          <div style={{ ...workbenchStyles.label, marginBottom: 4 }}>Evidence</div>
+          <div style={{ display: "grid", gap: 2 }}>
+            {facts.evidence_refs.map((ref, i) => (
+              <button
+                key={i}
+                onClick={() => onEvidenceClick(ref.doc_id, ref.quote)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  background: "none",
+                  border: "none",
+                  padding: "4px 0",
+                  fontSize: 12,
+                  lineHeight: 1.45,
+                  color: "#667085",
+                  cursor: "pointer",
+                }}
+              >
+                <span style={{ color: "#2563eb", fontWeight: 500 }}>
+                  {ref.doc_id}
+                </span>
+                {" — "}
+                <span>&ldquo;{ref.quote}&rdquo;</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

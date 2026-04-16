@@ -57,7 +57,7 @@ describe("GapAnalysisTable", () => {
     render(
       <GapAnalysisTable facts={baseFacts} findings={findings} onEvidenceClick={() => {}} />
     );
-    expect(screen.getByText("Conflicts:")).toBeInTheDocument();
+    expect(screen.getByText("Conflicts")).toBeInTheDocument();
     expect(screen.getByText("Conflicting info about dates")).toBeInTheDocument();
   });
 
@@ -65,7 +65,31 @@ describe("GapAnalysisTable", () => {
     render(
       <GapAnalysisTable facts={baseFacts} findings={baseFindings} onEvidenceClick={() => {}} />
     );
-    expect(screen.queryByText("Conflicts:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Conflicts")).not.toBeInTheDocument();
+  });
+
+  it("shows appeal basis when present", () => {
+    const findings = { ...baseFindings, appeal_basis: "Medical necessity supported by clinical notes" };
+    render(
+      <GapAnalysisTable facts={baseFacts} findings={findings} onEvidenceClick={() => {}} />
+    );
+    expect(screen.getByText("Appeal Basis")).toBeInTheDocument();
+    expect(screen.getByText("Medical necessity supported by clinical notes")).toBeInTheDocument();
+  });
+
+  it("hides appeal basis when null", () => {
+    render(
+      <GapAnalysisTable facts={baseFacts} findings={baseFindings} onEvidenceClick={() => {}} />
+    );
+    expect(screen.queryByText("Appeal Basis")).not.toBeInTheDocument();
+  });
+
+  it("shows empty state when no document requirements", () => {
+    const facts = { ...baseFacts, required_documents: [] };
+    render(
+      <GapAnalysisTable facts={facts} findings={baseFindings} onEvidenceClick={() => {}} />
+    );
+    expect(screen.getByText("No document requirements identified.")).toBeInTheDocument();
   });
 
   it("renders evidence refs and fires callback", async () => {

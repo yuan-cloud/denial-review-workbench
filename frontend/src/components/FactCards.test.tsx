@@ -33,19 +33,26 @@ describe("FactCards", () => {
     expect(screen.getByText("85%")).toBeInTheDocument();
   });
 
-  it("renders required documents", () => {
+  it("shows contextual confidence label for high confidence", () => {
     render(<FactCards facts={baseFacts} onEvidenceClick={() => {}} />);
-    expect(screen.getByText("physician order")).toBeInTheDocument();
-    expect(screen.getByText("progress notes")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
   });
 
-  it("hides required documents when empty", () => {
-    const facts = { ...baseFacts, required_documents: [] };
+  it("shows Medium label for mid-range confidence", () => {
+    const facts = { ...baseFacts, confidence: 0.75 };
     render(<FactCards facts={facts} onEvidenceClick={() => {}} />);
-    expect(screen.queryByText("Required Documents")).not.toBeInTheDocument();
+    expect(screen.getByText("75%")).toBeInTheDocument();
+    expect(screen.getByText("Medium")).toBeInTheDocument();
   });
 
-  it("renders evidence refs as clickable buttons", async () => {
+  it("shows Low label for low confidence", () => {
+    const facts = { ...baseFacts, confidence: 0.5 };
+    render(<FactCards facts={facts} onEvidenceClick={() => {}} />);
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByText("Low")).toBeInTheDocument();
+  });
+
+  it("renders evidence refs as clickable elements", async () => {
     const onClick = vi.fn();
     const facts: CaseFacts = {
       ...baseFacts,
@@ -58,6 +65,15 @@ describe("FactCards", () => {
 
     await userEvent.click(btn);
     expect(onClick).toHaveBeenCalledWith("denial-letter", "some quote");
+  });
+
+  it("shows doc_id in evidence ref", () => {
+    const facts: CaseFacts = {
+      ...baseFacts,
+      evidence_refs: [{ doc_id: "denial-letter", quote: "relevant text" }],
+    };
+    render(<FactCards facts={facts} onEvidenceClick={() => {}} />);
+    expect(screen.getByText("denial-letter")).toBeInTheDocument();
   });
 
   it("applies green color for high confidence", () => {
