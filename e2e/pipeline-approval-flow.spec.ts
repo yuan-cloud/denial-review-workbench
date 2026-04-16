@@ -34,6 +34,12 @@ test.describe("Pipeline: full approval flow", () => {
 
     // Verify facts rendered
     const workspace = page.getByTestId("run-workspace-grid");
+    await page.keyboard.press("Tab");
+    await expect(
+      page.getByRole("link", { name: "Skip to review workspace" })
+    ).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#run-workspace-grid")).toBeFocused();
     await expect(workspace.getByText("Payer", { exact: true })).toBeVisible();
     await expect(workspace.getByText("Confidence", { exact: true })).toBeVisible();
     await expect(
@@ -48,11 +54,16 @@ test.describe("Pipeline: full approval flow", () => {
       .getByRole("button", { name: /denial-letter|auth-request|notes/ })
       .first();
     await expect(evidenceButton).toBeVisible({ timeout: 5_000 });
-    await evidenceButton.click();
+    await evidenceButton.focus();
+    await expect(evidenceButton).toBeFocused();
+    await page.keyboard.press("Enter");
 
     // Assert the <mark> highlight element rendered in the document panel
     const mark = page.locator("mark").first();
     await expect(mark).toBeVisible({ timeout: 3_000 });
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.id ?? ""))
+      .toMatch(/^doc-/);
     await page.screenshot({
       path: "docs/screenshots/03-evidence-highlight.png",
     });
@@ -69,6 +80,10 @@ test.describe("Pipeline: full approval flow", () => {
     await expect(
       workspace.getByText("E2E test: Approved with edits.", { exact: true })
     ).toBeVisible();
+    await expect(page.getByTestId("review-state-summary")).toBeFocused();
+    await expect(page.getByTestId("run-live-region")).toHaveText(
+      /Run approved\. Final recommendation is now locked\./
+    );
 
     // Screenshot: approved badge with final recommendation
     await page.screenshot({ path: "docs/screenshots/04-after-approve.png" });
@@ -78,6 +93,9 @@ test.describe("Pipeline: full approval flow", () => {
     await expect(page.getByText("REPLAY", { exact: true })).toBeVisible({
       timeout: 10_000,
     });
+    await expect(page.getByTestId("run-live-region")).toHaveText(
+      /Replay mode enabled\. Run state reconstructed from the audit log\./
+    );
     await page.screenshot({ path: "docs/screenshots/05-replay.png" });
 
     // Navigate back
@@ -85,23 +103,41 @@ test.describe("Pipeline: full approval flow", () => {
     await expect(page.getByText("Denial Review Workbench")).toBeVisible();
   });
 
-  test("case-003 escalation shows escalation notice", async ({ page }) => {
+  test("case-003 escalation: blocked UX, replay, and 409 guard", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByText("case-003")).toBeVisible();
 
+    // Queue shows Escalation path type
     const case003Row = page.locator("tr", { hasText: "case-003" });
+    await expect(case003Row.getByText("Escalation")).toBeVisible();
+
     await case003Row.getByRole("button", { name: "Run Review" }).click();
 
-    // Wait for escalation notice
+    // Above-the-fold escalation banner
     await expect(page.getByText("Case Escalated — Workflow Blocked")).toBeVisible({
       timeout: 60_000,
     });
+    await expect(page.getByText(/manual compliance review/)).toBeVisible();
+    await expect(page.getByText(/409/)).toBeVisible();
 
-    // No Approve button should be present
+    // Status pill shows escalated
+    await expect(page.getByText("escalated")).toBeVisible();
+
+    // Recommendation section shows disabled message, not approval controls
+    await expect(page.getByText("Approval controls are disabled for escalated cases.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
 
-    // Screenshot: escalation state
+    // Screenshot: full escalation state
     await page.screenshot({ path: "docs/screenshots/06-escalation.png" });
+
+    // Replay preserves the blocked framing
+    await page.getByRole("button", { name: "Replay" }).click();
+    await expect(page.getByText("REPLAY", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
+    // Escalation banner still visible after replay
+    await expect(page.getByText("Case Escalated — Workflow Blocked")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
 
     // Navigate back
     await page.getByRole("button", { name: /Back/ }).first().click();
