@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type {
   ButtonHTMLAttributes,
   CSSProperties,
@@ -25,6 +26,30 @@ const palette = {
   dangerSoft: "#fef3f2",
   neutralSoft: "#eef2f6",
 };
+
+// Breakpoints
+const BREAKPOINT_TABLET = "(max-width: 1099px)";
+const BREAKPOINT_MOBILE = "(max-width: 639px)";
+
+function useMediaQuery(query: string): boolean {
+  const supported =
+    typeof window !== "undefined" && typeof window.matchMedia === "function";
+
+  const [matches, setMatches] = useState(() =>
+    supported ? window.matchMedia(query).matches : false
+  );
+
+  useEffect(() => {
+    if (!supported) return;
+    const mql = window.matchMedia(query);
+    setMatches(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [query, supported]);
+
+  return matches;
+}
 
 type Tone = "neutral" | "primary" | "success" | "warning" | "danger";
 type ButtonVariant = "primary" | "secondary" | "ghost";
@@ -209,7 +234,7 @@ export const workbenchStyles = {
   } satisfies CSSProperties,
   cardGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: 10,
   } satisfies CSSProperties,
   denseTable: {
@@ -320,6 +345,7 @@ export function WorkbenchScreen({
   fullHeight = false,
   maxWidth = 1320,
 }: PropsWithChildren<{ fullHeight?: boolean; maxWidth?: number }>) {
+  const isMobile = useMediaQuery(BREAKPOINT_MOBILE);
   return (
     <div
       style={{
@@ -331,6 +357,7 @@ export function WorkbenchScreen({
         style={{
           ...workbenchStyles.pageInner,
           maxWidth,
+          padding: isMobile ? 12 : 20,
           minHeight: fullHeight ? "100vh" : undefined,
           display: fullHeight ? "flex" : "block",
           flexDirection: fullHeight ? "column" : undefined,
@@ -354,11 +381,18 @@ export function WorkbenchPageHeader({
   description?: string;
   actions?: ReactNode;
 }) {
+  const isMobile = useMediaQuery(BREAKPOINT_MOBILE);
   return (
-    <div style={workbenchStyles.topBar}>
+    <div
+      style={{
+        ...workbenchStyles.topBar,
+        flexDirection: isMobile ? "column" : "row",
+        alignItems: isMobile ? "stretch" : "center",
+      }}
+    >
       <div style={{ flex: 1, minWidth: 0 }}>
         {eyebrow ? <div style={workbenchStyles.eyebrow}>{eyebrow}</div> : null}
-        <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
+        <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, letterSpacing: "-0.02em" }}>
           {title}
         </div>
         {description ? (
@@ -485,12 +519,16 @@ export function WorkbenchPaneGrid({
   columns?: CSSProperties["gridTemplateColumns"];
   testId?: string;
 }>) {
+  const isStacked = useMediaQuery(BREAKPOINT_TABLET);
   return (
     <div
       data-testid={testId}
       style={{
         ...workbenchStyles.paneGrid,
-        gridTemplateColumns: columns ?? workbenchStyles.paneGrid.gridTemplateColumns,
+        gridTemplateColumns: isStacked
+          ? "1fr"
+          : (columns ?? workbenchStyles.paneGrid.gridTemplateColumns),
+        overflowX: isStacked ? "visible" : "auto",
         ...style,
       }}
     >

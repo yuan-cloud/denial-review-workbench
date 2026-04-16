@@ -112,7 +112,8 @@ export default function CaseListPage({ onSelectCase }: Props) {
               No cases available for review. Check back later or verify the data directory.
             </WorkbenchNotice>
           ) : (
-            <table style={workbenchStyles.denseTable}>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <table style={{ ...workbenchStyles.denseTable, minWidth: 700 }}>
               <thead>
                 <tr style={workbenchStyles.denseTableHead}>
                   <th style={workbenchStyles.denseTableHeaderCell}>Case</th>
@@ -173,6 +174,7 @@ export default function CaseListPage({ onSelectCase }: Props) {
                 })}
               </tbody>
             </table>
+            </div>
           )}
 
           {runningCase ? (
