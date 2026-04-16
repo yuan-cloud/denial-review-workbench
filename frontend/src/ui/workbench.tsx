@@ -342,6 +342,12 @@ export const workbenchStyles = {
   } satisfies CSSProperties,
 };
 
+export function formatDocumentLabel(docId: string): string {
+  return docId
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function WorkbenchScreen({
   children,
   fullHeight = false,

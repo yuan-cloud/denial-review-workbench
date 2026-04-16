@@ -1,5 +1,6 @@
 import type { CaseFacts, CaseFindings } from "../types";
 import {
+  formatDocumentLabel,
   WorkbenchNotice,
   WorkbenchSectionHeading,
   workbenchStyles,
@@ -9,10 +10,6 @@ interface Props {
   facts: CaseFacts | null;
   findings: CaseFindings | null;
   onEvidenceClick: (docId: string, quote: string) => void;
-}
-
-function formatDocLabel(docId: string): string {
-  return docId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: Props) {
@@ -170,7 +167,7 @@ export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: P
                 }}
               >
                 <span style={{ color: "#2563eb", fontWeight: 500 }}>
-                  [{formatDocLabel(ref.doc_id)}]
+                  [{formatDocumentLabel(ref.doc_id)}]
                 </span>{" "}
                 <span>&ldquo;{ref.quote}&rdquo;</span>
               </button>

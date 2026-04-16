@@ -1,5 +1,6 @@
 import type { CaseFacts } from "../types";
 import {
+  formatDocumentLabel,
   WorkbenchField,
   WorkbenchNotice,
   WorkbenchSectionHeading,
@@ -9,10 +10,6 @@ import {
 interface Props {
   facts: CaseFacts | null;
   onEvidenceClick: (docId: string, quote: string) => void;
-}
-
-function formatDocLabel(docId: string): string {
-  return docId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function confidenceColor(confidence: number): string {
@@ -111,7 +108,7 @@ export default function FactCards({ facts, onEvidenceClick }: Props) {
                 }}
               >
                 <span style={{ color: "#2563eb", fontWeight: 500 }}>
-                  {formatDocLabel(ref.doc_id)}
+                  {formatDocumentLabel(ref.doc_id)}
                 </span>
                 {" — "}
                 <span>&ldquo;{ref.quote}&rdquo;</span>

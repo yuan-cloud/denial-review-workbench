@@ -8,6 +8,7 @@ import RecommendationEditor from "../components/RecommendationEditor";
 import RunHistoryPanel from "../components/RunHistoryPanel";
 import {
   BREAKPOINT_MOBILE,
+  formatDocumentLabel,
   useMediaQuery,
   WorkbenchActionBar,
   WorkbenchButton,
@@ -39,10 +40,6 @@ const srOnlyStyle = {
   whiteSpace: "nowrap",
   border: 0,
 } as const;
-
-function formatDocumentLabel(docId: string): string {
-  return docId.replace(/-/g, " ");
-}
 
 function describeError(error: unknown): string {
   if (error instanceof ApiError) {

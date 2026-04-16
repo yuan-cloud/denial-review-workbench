@@ -418,7 +418,7 @@ describe("RunPage", () => {
       expect(document.getElementById("doc-denial-letter")).toHaveFocus();
       expect(mockScrollIntoView).toHaveBeenCalled();
       expect(screen.getByTestId("run-live-region")).toHaveTextContent(
-        /Evidence focus moved to denial letter\./
+        /Evidence focus moved to Denial Letter\./
       );
     });
   });
