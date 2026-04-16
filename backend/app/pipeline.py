@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.errors import PipelineError
@@ -84,7 +84,7 @@ ACTION_TYPE_ALIASES: dict[str, str] = {
 
 
 def make_run_id(case_id: str) -> str:
-    return f"run-{case_id}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+    return f"run-{case_id}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
 
 
 def load_documents(case_id: str) -> list[CaseDocument]:

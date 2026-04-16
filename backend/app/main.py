@@ -2,11 +2,12 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
 
 from app import state
 from app.errors import PipelineError
@@ -175,7 +176,7 @@ def post_approve(run_id: str, body: ApproveRequest = None):
                        else existing["draft_text"]),
     }
 
-    ts = datetime.utcnow().isoformat() + "Z"
+    ts = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     approved_event = {
         "type": "approved",
         "timestamp": ts,
@@ -212,7 +213,7 @@ def get_replay(run_id: str):
     )
 
 
-@app.get("/demo-fallback/{case_id}")
+@app.get("/demo-fallback/{case_id}", response_model=RunStatus)
 def get_demo_fallback(case_id: str):
     if case_id not in VALID_CASE_IDS:
         raise HTTPException(
@@ -231,7 +232,7 @@ def get_demo_fallback(case_id: str):
         )
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
+            payload = json.load(f)
     except json.JSONDecodeError as exc:
         raise HTTPException(
             status_code=500,
@@ -239,4 +240,11 @@ def get_demo_fallback(case_id: str):
                 f"Saved fallback run for {case_id} is invalid JSON. Recopy "
                 "saved_demo_run.json from mock_run.json before using this route."
             ),
+        ) from exc
+    try:
+        return RunStatus.model_validate(payload)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Saved fallback run for {case_id} does not match RunStatus schema.",
         ) from exc

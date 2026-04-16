@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ def append_event(run_id: str, event_type: str, payload: dict,
     """Append a single event to the run's JSONL log."""
     event = {
         "type": event_type,
-        "timestamp": timestamp or (datetime.utcnow().isoformat() + "Z"),
+        "timestamp": timestamp or datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "payload": payload,
     }
     path = _run_path(run_id)

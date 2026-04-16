@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -254,6 +253,19 @@ class TestDemoFallbackEndpoint:
         resp = client.get("/demo-fallback/case-999")
         assert resp.status_code == 404
         assert "unknown fallback case_id" in resp.json()["detail"].lower()
+
+    def test_demo_fallback_invalid_shape(self, client, tmp_path, monkeypatch):
+        case_dir = tmp_path / "cases" / "case-001"
+        case_dir.mkdir(parents=True)
+        (case_dir / "saved_demo_run.json").write_text(
+            json.dumps({"run_id": "broken"}),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("app.main.DATA_DIR", tmp_path)
+
+        resp = client.get("/demo-fallback/case-001")
+        assert resp.status_code == 500
+        assert "does not match runstatus schema" in resp.json()["detail"].lower()
 
 
 class TestLifespan:
