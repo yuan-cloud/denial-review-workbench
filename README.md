@@ -2,7 +2,7 @@
 
 **Auditable human-in-the-loop denial review for document-heavy healthcare ops**
 
-Denial review pipelines process a full case — extraction, gap analysis, draft — in under 15 seconds. Replay any approved run: status is preserved, no model call is made, and the JSONL log gains exactly one line. Verify it yourself: `./bench.sh`
+Denial review pipelines process a full case — extraction, gap analysis, draft — typically in under 15 seconds. Replay any approved run: status is preserved, no model call is made, and the JSONL log gains exactly one line. Verify it yourself: `./bench.sh`
 
 ---
 

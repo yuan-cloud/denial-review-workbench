@@ -48,6 +48,8 @@ cd backend && uvicorn app.main:app --port 8000 &
 cd .. && ./bench.sh case-002
 
 # Approve it
+# **Note:** Replace `{run_id}` with the run ID printed
+# by bench.sh (e.g. `run-case-002-20260416081820`).
 curl -X POST http://localhost:8000/runs/{run_id}/approve \
   -H "Content-Type: application/json" \
   -d '{"draft_text": "Approved as drafted."}'
