@@ -1,0 +1,120 @@
+schema_version: 2
+name: repo-playbook
+description: Project-specific rules for this repository
+metadata:
+  createdAt: 2026-04-16T01:53:06.536Z
+  totalReflections: 0
+  totalSessionsProcessed: 0
+deprecatedPatterns: []
+bullets:
+  - id: b-mo0tg8jl-ulzvs4
+    scope: workspace
+    category: decision
+    content: "decision: model_copy(update={}) standardized for is_replay_response
+      across all route sites in main.py — signals response variant not domain
+      state mutation"
+    source: learned
+    type: rule
+    isNegative: false
+    kind: workflow_rule
+    state: draft
+    maturity: candidate
+    helpfulCount: 0
+    harmfulCount: 0
+    feedbackEvents: []
+    confidenceDecayHalfLifeDays: 90
+    createdAt: 2026-04-16T01:44:12.610Z
+    updatedAt: 2026-04-16T01:44:12.610Z
+    pinned: false
+    deprecated: false
+    sourceSessions: []
+    sourceAgents: []
+    tags: []
+  - id: b-mo0tgaj0-3y4t3t
+    scope: workspace
+    category: decision
+    content: "decision: CASE_QUEUE_METADATA stays in main.py for now — bead bd-1dt
+      created to move to meta.json later"
+    source: learned
+    type: rule
+    isNegative: false
+    kind: workflow_rule
+    state: draft
+    maturity: candidate
+    helpfulCount: 0
+    harmfulCount: 0
+    feedbackEvents: []
+    confidenceDecayHalfLifeDays: 90
+    createdAt: 2026-04-16T01:44:15.180Z
+    updatedAt: 2026-04-16T01:44:15.180Z
+    pinned: false
+    deprecated: false
+    sourceSessions: []
+    sourceAgents: []
+    tags: []
+  - id: b-mo0tgbc4-6m6yj3
+    scope: workspace
+    category: decision
+    content: "decision: JSONL-based 409 guard added in approve route — JSONL is
+      authoritative source, in-memory state is not"
+    source: learned
+    type: rule
+    isNegative: false
+    kind: workflow_rule
+    state: draft
+    maturity: candidate
+    helpfulCount: 0
+    harmfulCount: 0
+    feedbackEvents: []
+    confidenceDecayHalfLifeDays: 90
+    createdAt: 2026-04-16T01:44:16.228Z
+    updatedAt: 2026-04-16T01:44:16.228Z
+    pinned: false
+    deprecated: false
+    sourceSessions: []
+    sourceAgents: []
+    tags: []
+  - id: b-mo0tge13-juw9q6
+    scope: workspace
+    category: decision
+    content: "decision: is_replay_response never persisted to JSONL — verified by
+      TestIsReplayResponseAbsentFromJSONL"
+    source: learned
+    type: rule
+    isNegative: false
+    kind: workflow_rule
+    state: draft
+    maturity: candidate
+    helpfulCount: 0
+    harmfulCount: 0
+    feedbackEvents: []
+    confidenceDecayHalfLifeDays: 90
+    createdAt: 2026-04-16T01:44:19.719Z
+    updatedAt: 2026-04-16T01:44:19.719Z
+    pinned: false
+    deprecated: false
+    sourceSessions: []
+    sourceAgents: []
+    tags: []
+  - id: b-mo0tghh0-qdo2hf
+    scope: workspace
+    category: decision
+    content: "decision: UBS run per staged batch before each commit, not once at end
+      — catches issues per group"
+    source: learned
+    type: rule
+    isNegative: false
+    kind: workflow_rule
+    state: draft
+    maturity: candidate
+    helpfulCount: 0
+    harmfulCount: 0
+    feedbackEvents: []
+    confidenceDecayHalfLifeDays: 90
+    createdAt: 2026-04-16T01:44:24.180Z
+    updatedAt: 2026-04-16T01:44:24.180Z
+    pinned: false
+    deprecated: false
+    sourceSessions: []
+    sourceAgents: []
+    tags: []
