@@ -378,7 +378,31 @@ class TestRunPipelineOrchestration:
             "facts_extracted",
             "policy_retrieved",
             "analysis_completed",
+            "run_escalated",
         ]
+
+    def test_escalation_writes_run_escalated_event_to_jsonl(self, tmp_runs, monkeypatch):
+        """case-003: persisted audit trail includes explicit run_escalated marker."""
+        from app.pipeline import run_pipeline
+
+        mock_data = _load_mock_run("case-003")
+        responses = _canned_responses_from_mock(mock_data)
+        monkeypatch.setattr("app.pipeline.call_model", self._mock_call_model(responses))
+
+        result = run_pipeline("case-003", "facility-a")
+
+        jsonl_path = tmp_runs / f"{result.run_id}.jsonl"
+        lines = [
+            json.loads(line)
+            for line in jsonl_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        run_escalated = [event for event in lines if event["type"] == "run_escalated"]
+        assert len(run_escalated) == 1
+        assert run_escalated[0]["payload"] == {
+            "reason": "should_escalate flag set by analysis",
+            "conflict_count": len(result.findings.conflicts),
+        }
 
     def test_events_persisted_to_jsonl(self, tmp_runs, monkeypatch):
         """case-002: all 7 pipeline events are readable from the JSONL file."""

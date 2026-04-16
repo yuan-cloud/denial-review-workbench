@@ -250,6 +250,11 @@ def run_pipeline(case_id: str, facility_id: str) -> RunStatus:
 
     findings = analyze_gap(facts, policy_sections, documents)
     append_event(run_id, "analysis_completed", {"findings": findings.model_dump()})
+    if findings.should_escalate:
+        append_event(run_id, "run_escalated", {
+            "reason": "should_escalate flag set by analysis",
+            "conflict_count": len(findings.conflicts or []),
+        })
 
     recommendation = None
     if not findings.should_escalate:
