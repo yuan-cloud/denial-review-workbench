@@ -4,8 +4,6 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from app.errors import PipelineError
@@ -285,41 +283,43 @@ class TestFilenameToType:
 
 # ==================== bd-38p.2.4: orchestration — event ordering & escalation ====================
 
-# Canned model responses for mocking call_model
-_FACTS_RESPONSE = json.dumps({
-    "payer": "TestPayer",
-    "service_requested": "physical therapy",
-    "denial_reason": "not medically necessary",
-    "required_documents": [],
-    "confidence": 0.9,
-    "evidence_refs": [],
-})
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = REPO_ROOT / "data"
 
-_FINDINGS_CLEAN = json.dumps({
-    "missing_items": [],
-    "conflicts": [],
-    "appeal_basis": None,
-    "should_escalate": False,
-    "evidence_refs": [],
-})
 
-_FINDINGS_ESCALATE = json.dumps({
-    "missing_items": [],
-    "conflicts": ["conflicting info"],
-    "appeal_basis": None,
-    "should_escalate": True,
-    "evidence_refs": [],
-})
+def _load_mock_run(case_id: str) -> dict:
+    """Load real mock_run.json from data/cases/."""
+    path = DATA_DIR / "cases" / case_id / "mock_run.json"
+    with open(path) as f:
+        return json.load(f)
 
-_DRAFT_RESPONSE = json.dumps({
-    "action_type": "approve_or_proceed",
-    "rationale": "All clear",
-    "draft_text": "Approve this case.",
-})
+
+def _canned_responses_from_mock(mock: dict) -> list[str]:
+    """Extract canned call_model responses from a real mock_run.json.
+
+    The pipeline makes up to 3 model calls: extract_facts, analyze_gap,
+    draft_next_action.  Each call expects a JSON string back.  We pull
+    the corresponding payloads from the mock's event list so the canned
+    responses match real data shapes exactly.
+    """
+    responses: list[str] = []
+    for event in mock["events"]:
+        if event["type"] == "facts_extracted":
+            responses.append(json.dumps(event["payload"]["facts"]))
+        elif event["type"] == "analysis_completed":
+            responses.append(json.dumps(event["payload"]["findings"]))
+        elif event["type"] == "draft_generated":
+            responses.append(json.dumps(event["payload"]["recommendation"]))
+    return responses
 
 
 class TestRunPipelineOrchestration:
-    """Test run_pipeline with call_model mocked — verifies event ordering and state."""
+    """Test run_pipeline with call_model mocked — uses real case data from data/cases/.
+
+    call_model is the only mock (replaces the Anthropic API).  Case documents,
+    policy files, and canned model responses all come from real data/cases/
+    mock_run.json files.
+    """
 
     def _mock_call_model(self, responses: list[str]):
         """Return a side_effect function that yields responses in order."""
@@ -329,30 +329,19 @@ class TestRunPipelineOrchestration:
         return _call
 
     def test_happy_path_event_order(self, tmp_runs, monkeypatch):
+        """case-002: non-escalated run produces 7 events in correct order."""
         from app.pipeline import run_pipeline
-        monkeypatch.setattr("app.pipeline.DATA_DIR", tmp_runs.parent)
 
-        # Create case dir with one doc
-        case_dir = tmp_runs.parent / "cases" / "test-happy"
-        case_dir.mkdir(parents=True)
-        (case_dir / "denial-letter.md").write_text("Denied for no reason")
+        mock_data = _load_mock_run("case-002")
+        responses = _canned_responses_from_mock(mock_data)
+        monkeypatch.setattr("app.pipeline.call_model", self._mock_call_model(responses))
 
-        # Create policies dir
-        policies_dir = tmp_runs.parent / "policies"
-        policies_dir.mkdir(exist_ok=True)
-        (policies_dir / "fac-1.md").write_text("## Section\nPolicy text")
-        monkeypatch.setattr("app.policy_search.DATA_DIR", tmp_runs.parent)
-
-        mock = self._mock_call_model([_FACTS_RESPONSE, _FINDINGS_CLEAN, _DRAFT_RESPONSE])
-        monkeypatch.setattr("app.pipeline.call_model", mock)
-
-        result = run_pipeline("test-happy", "fac-1")
+        result = run_pipeline("case-002", "facility-a")
 
         assert result.status == "approval_requested"
         assert result.recommendation is not None
-        assert result.recommendation.action_type == "approve_or_proceed"
+        assert result.recommendation.action_type == "request_missing_documents"
 
-        # Verify event ordering (result.events are RunEvent pydantic objects)
         event_types = [e.type for e in result.events]
         assert event_types == [
             "run_started",
@@ -365,23 +354,16 @@ class TestRunPipelineOrchestration:
         ]
 
     def test_escalation_short_circuits_draft(self, tmp_runs, monkeypatch):
+        """case-003: should_escalate=true skips draft_next_action entirely."""
         from app.pipeline import run_pipeline
-        monkeypatch.setattr("app.pipeline.DATA_DIR", tmp_runs.parent)
 
-        case_dir = tmp_runs.parent / "cases" / "test-esc"
-        case_dir.mkdir(parents=True)
-        (case_dir / "denial-letter.md").write_text("Denied")
+        mock_data = _load_mock_run("case-003")
+        # case-003 has no draft_generated event — only facts + findings
+        responses = _canned_responses_from_mock(mock_data)
+        assert len(responses) == 2, "case-003 should yield exactly 2 model responses (no draft)"
+        monkeypatch.setattr("app.pipeline.call_model", self._mock_call_model(responses))
 
-        policies_dir = tmp_runs.parent / "policies"
-        policies_dir.mkdir(exist_ok=True)
-        (policies_dir / "fac-1.md").write_text("## Section\nPolicy")
-        monkeypatch.setattr("app.policy_search.DATA_DIR", tmp_runs.parent)
-
-        # Only 2 responses — no draft_next_action call expected
-        mock = self._mock_call_model([_FACTS_RESPONSE, _FINDINGS_ESCALATE])
-        monkeypatch.setattr("app.pipeline.call_model", mock)
-
-        result = run_pipeline("test-esc", "fac-1")
+        result = run_pipeline("case-003", "facility-a")
 
         assert result.status == "escalated"
         assert result.recommendation is None
@@ -399,44 +381,27 @@ class TestRunPipelineOrchestration:
         ]
 
     def test_events_persisted_to_jsonl(self, tmp_runs, monkeypatch):
+        """case-002: all 7 pipeline events are readable from the JSONL file."""
         from app.event_store import read_events
         from app.pipeline import run_pipeline
-        monkeypatch.setattr("app.pipeline.DATA_DIR", tmp_runs.parent)
 
-        case_dir = tmp_runs.parent / "cases" / "test-persist"
-        case_dir.mkdir(parents=True)
-        (case_dir / "denial-letter.md").write_text("Denied")
+        mock_data = _load_mock_run("case-002")
+        responses = _canned_responses_from_mock(mock_data)
+        monkeypatch.setattr("app.pipeline.call_model", self._mock_call_model(responses))
 
-        policies_dir = tmp_runs.parent / "policies"
-        policies_dir.mkdir(exist_ok=True)
-        (policies_dir / "fac-1.md").write_text("## S\nP")
-        monkeypatch.setattr("app.policy_search.DATA_DIR", tmp_runs.parent)
+        result = run_pipeline("case-002", "facility-a")
 
-        mock = self._mock_call_model([_FACTS_RESPONSE, _FINDINGS_CLEAN, _DRAFT_RESPONSE])
-        monkeypatch.setattr("app.pipeline.call_model", mock)
-
-        result = run_pipeline("test-persist", "fac-1")
-
-        # Events should be readable from the JSONL file
         persisted = read_events(result.run_id)
         assert len(persisted) == 7
         assert persisted[0]["type"] == "run_started"
 
     def test_run_id_embeds_case_id(self, tmp_runs, monkeypatch):
+        """run_id format is run-{case_id}-{timestamp}."""
         from app.pipeline import run_pipeline
-        monkeypatch.setattr("app.pipeline.DATA_DIR", tmp_runs.parent)
 
-        case_dir = tmp_runs.parent / "cases" / "case-xyz"
-        case_dir.mkdir(parents=True)
-        (case_dir / "denial-letter.md").write_text("Denied")
+        mock_data = _load_mock_run("case-002")
+        responses = _canned_responses_from_mock(mock_data)
+        monkeypatch.setattr("app.pipeline.call_model", self._mock_call_model(responses))
 
-        policies_dir = tmp_runs.parent / "policies"
-        policies_dir.mkdir(exist_ok=True)
-        (policies_dir / "fac-1.md").write_text("## S\nP")
-        monkeypatch.setattr("app.policy_search.DATA_DIR", tmp_runs.parent)
-
-        mock = self._mock_call_model([_FACTS_RESPONSE, _FINDINGS_CLEAN, _DRAFT_RESPONSE])
-        monkeypatch.setattr("app.pipeline.call_model", mock)
-
-        result = run_pipeline("case-xyz", "fac-1")
-        assert "case-xyz" in result.run_id
+        result = run_pipeline("case-002", "facility-a")
+        assert "case-002" in result.run_id
