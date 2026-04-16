@@ -5,6 +5,7 @@ import RunPage from "./RunPage";
 import type { RunStatus } from "../types";
 
 const mockFetch = vi.fn();
+const mockScrollIntoView = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 function okResponse(data: unknown) {
@@ -56,6 +57,11 @@ const baseRun: RunStatus = {
 
 beforeEach(() => {
   mockFetch.mockReset();
+  mockScrollIntoView.mockReset();
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: mockScrollIntoView,
+  });
 });
 
 describe("RunPage", () => {
@@ -150,6 +156,23 @@ describe("RunPage", () => {
     expect(onBack).toHaveBeenCalled();
   });
 
+  it("renders a skip link that moves focus into the review workspace", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Documents")).toBeInTheDocument();
+    });
+
+    await user.tab();
+    const skipLink = screen.getByRole("link", { name: "Skip to review workspace" });
+    expect(skipLink).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    expect(document.getElementById("run-workspace-grid")).toHaveFocus();
+  });
+
   it("renders three-column layout with all panels", async () => {
     mockFetch.mockResolvedValueOnce(okResponse(baseRun));
     render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
@@ -185,6 +208,36 @@ describe("RunPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Approved ✓")).toBeInTheDocument();
+    });
+  });
+
+  it("moves focus to the review state summary and announces approval", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    });
+
+    const approvedRun = {
+      ...baseRun,
+      status: "approved" as const,
+      recommendation: {
+        ...baseRun.recommendation!,
+        draft_text: "Approved after review.",
+      },
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(approvedRun));
+
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Approved ✓")).toBeInTheDocument();
+      expect(screen.getByTestId("review-state-summary")).toHaveFocus();
+      expect(screen.getByTestId("run-live-region")).toHaveTextContent(
+        /Run approved\. Final recommendation is now locked\./
+      );
     });
   });
 
@@ -260,6 +313,64 @@ describe("RunPage", () => {
       // Run data preserved
       expect(screen.getByText("Acme")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Retry replay" })).toBeInTheDocument();
+    });
+  });
+
+  it("announces replay mode when replay succeeds", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replay" })).toBeInTheDocument();
+    });
+
+    mockFetch.mockResolvedValueOnce(
+      okResponse({ ...baseRun, is_replay_response: true })
+    );
+
+    await user.click(screen.getByRole("button", { name: "Replay" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("REPLAY")).toBeInTheDocument();
+      expect(screen.getByTestId("run-live-region")).toHaveTextContent(
+        /Replay mode enabled\. Run state reconstructed from the audit log\./
+      );
+    });
+  });
+
+  it("moves focus to the matching document when an evidence button is activated from the keyboard", async () => {
+    const user = userEvent.setup();
+    const runWithEvidence: RunStatus = {
+      ...baseRun,
+      facts: {
+        ...baseRun.facts!,
+        evidence_refs: [
+          {
+            doc_id: "denial-letter",
+            quote: "Denied for PT.",
+          },
+        ],
+      },
+    };
+
+    mockFetch.mockResolvedValueOnce(okResponse(runWithEvidence));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    const evidenceButton = await screen.findByRole("button", {
+      name: /denial letter/i,
+    });
+    evidenceButton.focus();
+    expect(evidenceButton).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(document.getElementById("doc-denial-letter")).toHaveFocus();
+      expect(mockScrollIntoView).toHaveBeenCalled();
+      expect(screen.getByTestId("run-live-region")).toHaveTextContent(
+        /Evidence focus moved to denial letter\./
+      );
     });
   });
 

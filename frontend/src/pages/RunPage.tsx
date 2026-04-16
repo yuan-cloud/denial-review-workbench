@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type { RunStatus } from "../types";
 import { ApiError, getReplay, getRun, postApprove } from "../api";
 import DocumentPanel from "../components/DocumentPanel";
@@ -24,6 +24,22 @@ interface Props {
   caseId: string;
   runId: string;
   onBack: () => void;
+}
+
+const srOnlyStyle = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+} as const;
+
+function formatDocumentLabel(docId: string): string {
+  return docId.replace(/-/g, " ");
 }
 
 function describeError(error: unknown): string {
@@ -102,6 +118,12 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetchNotFound, setFetchNotFound] = useState(false);
   const [activeQuote, setActiveQuote] = useState<{ doc_id: string; quote: string } | null>(null);
+  const [skipLinkFocused, setSkipLinkFocused] = useState(false);
+  const [liveMessage, setLiveMessage] = useState("");
+  const reviewStateRef = useRef<HTMLDivElement | null>(null);
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const previousStatusRef = useRef<RunStatus["status"] | null>(null);
+  const previousReplayRef = useRef<boolean | null>(null);
 
   const fetchRun = useCallback(() => {
     setLoading(true);
@@ -127,6 +149,41 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
     fetchRun();
   }, [fetchRun]);
 
+  useEffect(() => {
+    if (!run) {
+      previousStatusRef.current = null;
+      previousReplayRef.current = null;
+      return;
+    }
+
+    const previousStatus = previousStatusRef.current;
+    const previousReplay = previousReplayRef.current;
+
+    if (previousStatus && previousStatus !== run.status) {
+      if (run.status === "approved") {
+        setLiveMessage("Run approved. Final recommendation is now locked.");
+        reviewStateRef.current?.focus();
+      } else if (run.status === "escalated") {
+        setLiveMessage("Run escalated. Manual compliance review is required.");
+        reviewStateRef.current?.focus();
+      }
+    } else if (
+      previousReplay !== null &&
+      previousReplay !== run.is_replay_response
+    ) {
+      if (run.is_replay_response) {
+        setLiveMessage(
+          "Replay mode enabled. Run state reconstructed from the audit log."
+        );
+      } else {
+        setLiveMessage("Returned to the live run workspace.");
+      }
+    }
+
+    previousStatusRef.current = run.status;
+    previousReplayRef.current = run.is_replay_response;
+  }, [run]);
+
   const handleApprove = useCallback(
     async (draftText: string) => {
       const updated = await postApprove(runId, draftText);
@@ -142,7 +199,13 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
 
   const handleEvidenceClick = useCallback((docId: string, quote: string) => {
     setActiveQuote({ doc_id: docId, quote });
-    document.getElementById(`doc-${docId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const target = document.getElementById(`doc-${docId}`);
+    if (target instanceof HTMLElement) {
+      target.tabIndex = -1;
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      setLiveMessage(`Evidence focus moved to ${formatDocumentLabel(docId)}.`);
+    }
   }, []);
 
   const isEscalated = run?.status === "escalated";
@@ -275,16 +338,51 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
 
   return (
     <WorkbenchScreen fullHeight maxWidth={1480}>
+      <a
+        href="#run-workspace-grid"
+        onClick={(event) => {
+          event.preventDefault();
+          workspaceRef.current?.focus();
+        }}
+        onFocus={() => setSkipLinkFocused(true)}
+        onBlur={() => setSkipLinkFocused(false)}
+        style={{
+          position: "absolute",
+          left: 20,
+          top: skipLinkFocused ? 16 : -48,
+          zIndex: 20,
+          padding: "8px 12px",
+          borderRadius: 10,
+          background: "#101828",
+          color: "#ffffff",
+          textDecoration: "none",
+          fontSize: 13,
+          fontWeight: 600,
+          boxShadow: skipLinkFocused ? "0 6px 16px rgba(16, 24, 40, 0.18)" : "none",
+        }}
+      >
+        Skip to review workspace
+      </a>
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        data-testid="run-live-region"
+        style={srOnlyStyle}
+      >
+        {liveMessage}
+      </div>
       <div style={{ display: "grid", gap: 16, flex: 1, minHeight: 0 }}>
         {pageHeader}
 
         <WorkbenchSummaryStrip>
-          <WorkbenchSummaryItem
-            label="Review state"
-            value={titleCaseStatus(run.status)}
-            tone={statusTone}
-            meta={`${workflowSummary} ${modeSummary}`}
-          />
+          <div ref={reviewStateRef} tabIndex={-1} data-testid="review-state-summary">
+            <WorkbenchSummaryItem
+              label="Review state"
+              value={titleCaseStatus(run.status)}
+              tone={statusTone}
+              meta={`${workflowSummary} ${modeSummary}`}
+            />
+          </div>
           <WorkbenchSummaryItem
             label="Facility pack"
             value={run.facility_id}
@@ -332,44 +430,46 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
           </WorkbenchNotice>
         )}
 
-        <WorkbenchPaneGrid testId="run-workspace-grid">
-          <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
-            <DocumentPanel
-              documents={run.documents}
-              retrievedPolicySections={run.retrieved_policy_sections}
-              facilityId={run.facility_id}
-              activeQuote={activeQuote}
-            />
-          </WorkbenchPanel>
+        <div id="run-workspace-grid" tabIndex={-1} ref={workspaceRef}>
+          <WorkbenchPaneGrid testId="run-workspace-grid">
+            <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
+              <DocumentPanel
+                documents={run.documents}
+                retrievedPolicySections={run.retrieved_policy_sections}
+                facilityId={run.facility_id}
+                activeQuote={activeQuote}
+              />
+            </WorkbenchPanel>
 
-          <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
-            {run ? (
-              <>
-                <FactCards facts={run.facts} onEvidenceClick={handleEvidenceClick} />
-                <GapAnalysisTable
-                  facts={run.facts}
-                  findings={run.findings}
-                  onEvidenceClick={handleEvidenceClick}
-                />
-                <RecommendationEditor
-                  recommendation={run.recommendation}
-                  findings={run.findings}
-                  status={run.status}
-                  onApprove={handleApprove}
-                  onRefresh={fetchRun}
-                />
-              </>
-            ) : null}
-          </WorkbenchPanel>
+            <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
+              {run ? (
+                <>
+                  <FactCards facts={run.facts} onEvidenceClick={handleEvidenceClick} />
+                  <GapAnalysisTable
+                    facts={run.facts}
+                    findings={run.findings}
+                    onEvidenceClick={handleEvidenceClick}
+                  />
+                  <RecommendationEditor
+                    recommendation={run.recommendation}
+                    findings={run.findings}
+                    status={run.status}
+                    onApprove={handleApprove}
+                    onRefresh={fetchRun}
+                  />
+                </>
+              ) : null}
+            </WorkbenchPanel>
 
-          <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
-            <RunHistoryPanel
-              events={run.events}
-              isReplayResponse={run.is_replay_response}
-              onReplay={handleReplay}
-            />
-          </WorkbenchPanel>
-        </WorkbenchPaneGrid>
+            <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
+              <RunHistoryPanel
+                events={run.events}
+                isReplayResponse={run.is_replay_response}
+                onReplay={handleReplay}
+              />
+            </WorkbenchPanel>
+          </WorkbenchPaneGrid>
+        </div>
       </div>
     </WorkbenchScreen>
   );

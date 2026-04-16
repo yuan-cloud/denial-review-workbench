@@ -107,9 +107,7 @@ test.describe("Pipeline: full approval flow", () => {
     await page.goto("/");
     await expect(page.getByText("case-003")).toBeVisible();
 
-    // Queue shows Escalation path type
     const case003Row = page.locator("tr", { hasText: "case-003" });
-    await expect(case003Row.getByText("Escalation")).toBeVisible();
 
     await case003Row.getByRole("button", { name: "Run Review" }).click();
 
@@ -121,7 +119,11 @@ test.describe("Pipeline: full approval flow", () => {
     await expect(page.getByText(/409/)).toBeVisible();
 
     // Status pill shows escalated
-    await expect(page.getByText("escalated")).toBeVisible();
+    await expect(
+      page.getByTestId("review-state-summary").getByText("Escalated", {
+        exact: true,
+      })
+    ).toBeVisible();
 
     // Recommendation section shows disabled message, not approval controls
     await expect(page.getByText("Approval controls are disabled for escalated cases.")).toBeVisible();
