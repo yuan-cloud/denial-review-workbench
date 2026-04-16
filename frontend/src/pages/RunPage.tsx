@@ -513,23 +513,19 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
             </WorkbenchPanel>
 
             <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
-              {run ? (
-                <>
-                  <FactCards facts={run.facts} onEvidenceClick={handleEvidenceClick} />
-                  <GapAnalysisTable
-                    facts={run.facts}
-                    findings={run.findings}
-                    onEvidenceClick={handleEvidenceClick}
-                  />
-                  <RecommendationEditor
-                    recommendation={run.recommendation}
-                    findings={run.findings}
-                    status={run.status}
-                    onApprove={handleApprove}
-                    onRefresh={fetchRun}
-                  />
-                </>
-              ) : null}
+              <FactCards facts={run.facts} onEvidenceClick={handleEvidenceClick} />
+              <GapAnalysisTable
+                facts={run.facts}
+                findings={run.findings}
+                onEvidenceClick={handleEvidenceClick}
+              />
+              <RecommendationEditor
+                recommendation={run.recommendation}
+                findings={run.findings}
+                status={run.status}
+                onApprove={handleApprove}
+                onRefresh={fetchRun}
+              />
             </WorkbenchPanel>
 
             <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
