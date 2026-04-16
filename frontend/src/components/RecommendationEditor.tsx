@@ -31,19 +31,17 @@ export default function RecommendationEditor({
     setDraftText(recommendation.draft_text);
   }
 
-  // Escalation notice — no draft, no approve
+  // Escalation — primary signal is the above-the-fold banner in RunPage;
+  // here we just confirm the blocked state within the recommendation section.
   if (findings?.should_escalate) {
     return (
       <div style={{ marginBottom: 20 }}>
         <WorkbenchSectionHeading
           title="Recommendation"
-          description="Human review and final action state."
+          description="No action available — case is escalated."
         />
-        <WorkbenchNotice title="Escalated to Compliance Review" tone="danger">
-          <p style={{ margin: 0, fontSize: 14 }}>
-            Conflicting denial reasons detected. This case requires manual compliance review
-            before any appeal action can be taken.
-          </p>
+        <WorkbenchNotice tone="danger">
+          Approval controls are disabled for escalated cases.
         </WorkbenchNotice>
       </div>
     );

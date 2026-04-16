@@ -121,7 +121,7 @@ describe("RecommendationEditor", () => {
         onApprove={() => {}}
       />
     );
-    expect(screen.getByText("Escalated to Compliance Review")).toBeInTheDocument();
+    expect(screen.getByText("Approval controls are disabled for escalated cases.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
 });
