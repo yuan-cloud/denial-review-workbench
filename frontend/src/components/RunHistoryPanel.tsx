@@ -25,16 +25,47 @@ const EVENT_LABELS: Record<string, string> = {
   approved: "Approved",
 };
 
-function formatTimestamp(ts: string): string {
+const EVENT_DOT_COLOR: Record<string, string> = {
+  run_started: "#6b7280",
+  documents_loaded: "#2563eb",
+  facts_extracted: "#2563eb",
+  policy_retrieved: "#2563eb",
+  analysis_completed: "#7c3aed",
+  draft_generated: "#2563eb",
+  approval_requested: "#d97706",
+  approved: "#16a34a",
+};
+
+function formatDateTime(ts: string): string {
   try {
     const d = new Date(ts);
-    return d.toLocaleTimeString("en-US", {
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    }) + ", " + d.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
     });
   } catch {
     return ts;
+  }
+}
+
+function formatElapsed(startTs: string, eventTs: string): string | null {
+  try {
+    const start = new Date(startTs).getTime();
+    const event = new Date(eventTs).getTime();
+    const diffMs = event - start;
+    if (diffMs <= 0) return null;
+    if (diffMs < 1000) return `+${diffMs}ms`;
+    const secs = diffMs / 1000;
+    if (secs < 60) return `+${secs.toFixed(1)}s`;
+    const mins = Math.floor(secs / 60);
+    const remainSecs = Math.round(secs % 60);
+    return `+${mins}m ${remainSecs}s`;
+  } catch {
+    return null;
   }
 }
 
@@ -45,31 +76,60 @@ function eventSummary(event: RunEvent): string | null {
       return `Case: ${p.case_id ?? ""}`;
     case "documents_loaded": {
       const docs = p.documents as { doc_id: string }[] | undefined;
-      return docs ? `${docs.length} document(s)` : null;
+      return docs ? `${docs.length} document(s) loaded` : null;
     }
-    case "facts_extracted":
-      return p.facts ? `Confidence: ${((p.facts as { confidence?: number }).confidence ?? 0) * 100}%` : null;
+    case "facts_extracted": {
+      const facts = p.facts as { confidence?: number; payer?: string } | undefined;
+      if (!facts) return null;
+      const parts: string[] = [];
+      if (facts.payer) parts.push(facts.payer);
+      if (typeof facts.confidence === "number") parts.push(`${(facts.confidence * 100).toFixed(0)}% confidence`);
+      return parts.length > 0 ? parts.join(" — ") : null;
+    }
+    case "policy_retrieved": {
+      const sections = p.retrieved_policy_sections as string[] | undefined;
+      return sections ? `${sections.length} policy section(s) retrieved` : null;
+    }
     case "analysis_completed": {
-      const findings = p.findings as { should_escalate?: boolean; missing_items?: string[] } | undefined;
+      const findings = p.findings as { should_escalate?: boolean; missing_items?: string[]; conflicts?: string[] } | undefined;
       if (!findings) return null;
-      if (findings.should_escalate) return "Escalated";
-      return `${findings.missing_items?.length ?? 0} missing item(s)`;
+      if (findings.should_escalate) return "Escalated — compliance review required";
+      const parts: string[] = [];
+      if (findings.missing_items?.length) parts.push(`${findings.missing_items.length} missing`);
+      if (findings.conflicts?.length) parts.push(`${findings.conflicts.length} conflict(s)`);
+      return parts.length > 0 ? parts.join(", ") : "No gaps found";
     }
-    case "draft_generated":
-      return p.recommendation ? `Action: ${(p.recommendation as { action_type?: string }).action_type ?? ""}` : null;
-    case "approved":
+    case "draft_generated": {
+      const rec = p.recommendation as { action_type?: string } | undefined;
+      return rec?.action_type ? `Action: ${rec.action_type.replace(/_/g, " ")}` : null;
+    }
+    case "approved": {
+      const finalRec = p.final_recommendation as { draft_text?: string } | undefined;
+      if (finalRec?.draft_text) {
+        const preview = finalRec.draft_text.length > 60
+          ? finalRec.draft_text.slice(0, 57) + "…"
+          : finalRec.draft_text;
+        return `Final: "${preview}"`;
+      }
       return "Final recommendation recorded";
+    }
     default:
       return null;
   }
 }
 
+function formatEventType(type: string): string {
+  return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: Props) {
+  const runStartTs = events.length > 0 ? events[0].timestamp : null;
+
   return (
     <div>
       <WorkbenchSectionHeading
         title="Run History"
-        description="Append-only event timeline and replay control."
+        description="Append-only audit trail of pipeline events."
         sticky
         badge={
           isReplayResponse ? (
@@ -79,11 +139,13 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
       />
 
       {events.length === 0 ? (
-        <WorkbenchNotice>No runs yet. Click Run Review to start.</WorkbenchNotice>
+        <WorkbenchNotice>No events recorded for this run.</WorkbenchNotice>
       ) : (
         <div style={workbenchStyles.stack}>
           {events.map((event, i) => {
             const summary = eventSummary(event);
+            const dotColor = EVENT_DOT_COLOR[event.type] ?? "#9ca3af";
+            const elapsed = runStartTs && i > 0 ? formatElapsed(runStartTs, event.timestamp) : null;
             return (
               <div
                 key={i}
@@ -91,7 +153,7 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
                   display: "grid",
                   gridTemplateColumns: "10px minmax(0, 1fr)",
                   gap: 12,
-                  padding: "12px 0",
+                  padding: "10px 0",
                   borderBottom:
                     i < events.length - 1 ? "1px solid #eef2f6" : "none",
                 }}
@@ -101,19 +163,24 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
                     width: 8,
                     height: 8,
                     borderRadius: "50%",
-                    background: event.type === "approved" ? "#16a34a" : "#2563eb",
+                    background: dotColor,
                     marginTop: 6,
                   }}
                 />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
-                    {EVENT_LABELS[event.type] ?? event.type}
+                <div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
+                      {EVENT_LABELS[event.type] ?? formatEventType(event.type)}
+                    </span>
+                    {elapsed ? (
+                      <span style={{ fontSize: 11, ...workbenchStyles.subtle }}>{elapsed}</span>
+                    ) : null}
                   </div>
-                  <div style={{ fontSize: 12, ...workbenchStyles.subtle }}>
-                    {formatTimestamp(event.timestamp)}
+                  <div style={{ fontSize: 11, ...workbenchStyles.subtle, marginTop: 2 }}>
+                    {formatDateTime(event.timestamp)}
                   </div>
                   {summary && (
-                    <div style={{ fontSize: 13, ...workbenchStyles.subdued, marginTop: 4 }}>
+                    <div style={{ fontSize: 12, ...workbenchStyles.subdued, marginTop: 4 }}>
                       {summary}
                     </div>
                   )}
@@ -134,6 +201,11 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
             Replay
           </WorkbenchButton>
         </WorkbenchActionBar>
+        {events.length > 0 ? (
+          <div style={{ fontSize: 11, ...workbenchStyles.subtle, marginTop: 8 }}>
+            Reconstruct run state from the persisted JSONL event log.
+          </div>
+        ) : null}
       </div>
     </div>
   );
