@@ -10,10 +10,14 @@ import {
   WorkbenchActionBar,
   WorkbenchButton,
   WorkbenchNotice,
+  WorkbenchPaneGrid,
   WorkbenchPageHeader,
   WorkbenchPanel,
   WorkbenchScreen,
   WorkbenchStatusPill,
+  WorkbenchSummaryItem,
+  WorkbenchSummaryStrip,
+  workbenchStyles,
 } from "../ui/workbench";
 
 interface Props {
@@ -32,6 +36,69 @@ function describeError(error: unknown): string {
     return error.detail ?? error.message;
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatTimestamp(timestamp: string | null | undefined): string {
+  if (!timestamp) {
+    return "—";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(timestamp));
+  } catch {
+    return timestamp;
+  }
+}
+
+function titleCaseStatus(status: RunStatus["status"]): string {
+  return status
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatCount(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function confidencePresentation(confidence: number | null): {
+  tone: "neutral" | "success" | "warning" | "danger";
+  label: string;
+  value: string;
+} {
+  if (confidence === null) {
+    return {
+      tone: "neutral",
+      label: "Pending",
+      value: "Pending",
+    };
+  }
+
+  if (confidence >= 0.8) {
+    return {
+      tone: "success",
+      label: "High confidence",
+      value: `${(confidence * 100).toFixed(0)}%`,
+    };
+  }
+
+  if (confidence >= 0.7) {
+    return {
+      tone: "warning",
+      label: "Medium confidence",
+      value: `${(confidence * 100).toFixed(0)}%`,
+    };
+  }
+
+  return {
+    tone: "danger",
+    label: "Low confidence",
+    value: `${(confidence * 100).toFixed(0)}%`,
+  };
 }
 
 export default function RunPage({ caseId, runId, onBack }: Props) {
@@ -118,6 +185,9 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
         ? "not found"
         : "load failed";
 
+  const modeTone = run?.is_replay_response ? "warning" : "neutral";
+  const modeLabel = run?.is_replay_response ? "Replay" : "Live";
+
   const pageHeader = (
     <WorkbenchPageHeader
       eyebrow="Run review"
@@ -126,6 +196,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
       actions={
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <WorkbenchStatusPill tone={statusTone}>{statusLabel}</WorkbenchStatusPill>
+          {run ? <WorkbenchStatusPill tone={modeTone}>{modeLabel}</WorkbenchStatusPill> : null}
           <WorkbenchButton onClick={onBack} size="sm">
             &larr; Back
           </WorkbenchButton>
@@ -141,7 +212,13 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
       : fetchNotFound
         ? "Run not found"
         : "Unable to load run";
-    const tone = loading ? "primary" : fetchNotFound ? "warning" : "danger";
+    let tone: "primary" | "warning" | "danger" = "danger";
+
+    if (loading) {
+      tone = "primary";
+    } else if (fetchNotFound) {
+      tone = "warning";
+    }
 
     return (
       <WorkbenchScreen fullHeight maxWidth={1400}>
@@ -191,10 +268,72 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
     return null;
   }
 
+  const confidence = run.facts?.confidence ?? null;
+  const confidenceView = confidencePresentation(confidence);
+  const missingCount = run.findings?.missing_items.length ?? 0;
+  const conflictCount = run.findings?.conflicts.length ?? 0;
+  const workflowSummary = isEscalated
+    ? "Blocked pending compliance review."
+    : run.status === "approved"
+      ? "Human approval recorded; final text is locked."
+      : "Awaiting human review and approval.";
+  const modeSummary = run.is_replay_response
+    ? "Replay reconstruction from the persisted event log."
+    : "Live workspace backed by the current run state.";
+  const gapSummary = isEscalated
+    ? `${formatCount(conflictCount || 1, "conflict")} triggered escalation.`
+    : missingCount > 0
+      ? `${formatCount(missingCount, "missing item")} identified before approval.`
+      : "No missing items detected in the packet.";
+  const startedAt = run.events[0]?.timestamp ?? null;
+  const lastEventAt =
+    run.events.length > 0 ? run.events[run.events.length - 1].timestamp : null;
+  const panelHeight = isEscalated || mutationError ? "min(64vh, 760px)" : "min(68vh, 820px)";
+
   return (
-    <WorkbenchScreen fullHeight maxWidth={1400}>
+    <WorkbenchScreen fullHeight maxWidth={1480}>
       <div style={{ display: "grid", gap: 16, flex: 1, minHeight: 0 }}>
         {pageHeader}
+
+        <WorkbenchSummaryStrip>
+          <WorkbenchSummaryItem
+            label="Review state"
+            value={titleCaseStatus(run.status)}
+            tone={statusTone}
+            meta={`${workflowSummary} ${modeSummary}`}
+          />
+          <WorkbenchSummaryItem
+            label="Facility pack"
+            value={run.facility_id}
+            valueStyle={workbenchStyles.mono}
+            meta={`${formatCount(run.documents.length, "document")} • ${formatCount(run.retrieved_policy_sections.length, "policy section")}`}
+          />
+          <WorkbenchSummaryItem
+            label="Confidence"
+            value={confidenceView.value}
+            tone={confidenceView.tone}
+            meta={
+              confidence === null
+                ? "Facts have not been extracted yet."
+                : `${confidenceView.label} • ${run.facts?.payer ?? "payer unavailable"}`
+            }
+          />
+          <WorkbenchSummaryItem
+            label="Gap status"
+            value={
+              isEscalated
+                ? formatCount(conflictCount || 1, "conflict")
+                : formatCount(missingCount, "missing item")
+            }
+            tone={isEscalated ? "danger" : missingCount > 0 ? "warning" : "success"}
+            meta={gapSummary}
+          />
+          <WorkbenchSummaryItem
+            label="Timeline"
+            value={`Started ${formatTimestamp(startedAt)}`}
+            meta={`Last event ${formatTimestamp(lastEventAt)}`}
+          />
+        </WorkbenchSummaryStrip>
 
         {isEscalated && (
           <WorkbenchNotice title="Case Escalated — Workflow Blocked" tone="danger">
@@ -237,16 +376,8 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
           </WorkbenchNotice>
         ) : null}
 
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
-            gap: 16,
-          }}
-        >
-          <WorkbenchPanel style={{ minHeight: 0 }}>
+        <WorkbenchPaneGrid testId="run-workspace-grid">
+          <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
             <DocumentPanel
               documents={run.documents}
               retrievedPolicySections={run.retrieved_policy_sections}
@@ -255,7 +386,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
             />
           </WorkbenchPanel>
 
-          <WorkbenchPanel style={{ minHeight: 0 }}>
+          <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
             {run ? (
               <>
                 <FactCards facts={run.facts} onEvidenceClick={handleEvidenceClick} />
@@ -274,14 +405,14 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
             ) : null}
           </WorkbenchPanel>
 
-          <WorkbenchPanel style={{ minHeight: 0 }}>
+          <WorkbenchPanel style={{ minHeight: 0, height: panelHeight }}>
             <RunHistoryPanel
               events={run.events}
               isReplayResponse={run.is_replay_response}
               onReplay={handleReplay}
             />
           </WorkbenchPanel>
-        </div>
+        </WorkbenchPaneGrid>
       </div>
     </WorkbenchScreen>
   );

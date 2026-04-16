@@ -251,6 +251,64 @@ export const workbenchStyles = {
     paddingTop: 16,
     borderTop: `1px solid ${palette.border}`,
   } satisfies CSSProperties,
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+    gap: 10,
+  } satisfies CSSProperties,
+  summaryItem: {
+    minHeight: 92,
+    padding: "12px 14px",
+    border: `1px solid ${palette.border}`,
+    borderRadius: 10,
+    background: palette.surfaceMuted,
+    boxSizing: "border-box",
+  } satisfies CSSProperties,
+  summaryItemHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 8,
+  } satisfies CSSProperties,
+  summaryItemLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: palette.textSubtle,
+  } satisfies CSSProperties,
+  summaryItemValue: {
+    fontSize: 20,
+    fontWeight: 700,
+    lineHeight: 1.2,
+    letterSpacing: "-0.02em",
+    color: palette.text,
+  } satisfies CSSProperties,
+  summaryItemMeta: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: palette.textMuted,
+  } satisfies CSSProperties,
+  summaryBadgeRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 6,
+    flexWrap: "wrap",
+  } satisfies CSSProperties,
+  paneGrid: {
+    flex: 1,
+    minHeight: 0,
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(360px, 1.35fr) minmax(320px, 1.05fr) minmax(280px, 0.9fr)",
+    gap: 16,
+    alignItems: "stretch",
+    overflowX: "auto",
+    paddingBottom: 4,
+  } satisfies CSSProperties,
   stack: {
     display: "grid",
     gap: 12,
@@ -328,6 +386,53 @@ export function WorkbenchPanel({
   );
 }
 
+export function WorkbenchSummaryStrip({
+  children,
+  style,
+  ariaLabel = "Run summary",
+}: PropsWithChildren<{ style?: CSSProperties; ariaLabel?: string }>) {
+  return (
+    <section
+      aria-label={ariaLabel}
+      style={{
+        ...workbenchStyles.panel,
+        overflow: "visible",
+        padding: 14,
+        ...style,
+      }}
+    >
+      <div style={workbenchStyles.summaryGrid}>{children}</div>
+    </section>
+  );
+}
+
+export function WorkbenchSummaryItem({
+  label,
+  value,
+  meta,
+  badges,
+  tone = "neutral",
+  valueStyle,
+}: {
+  label: string;
+  value: ReactNode;
+  meta?: ReactNode;
+  badges?: ReactNode;
+  tone?: Tone;
+  valueStyle?: CSSProperties;
+}) {
+  return (
+    <div style={{ ...workbenchStyles.summaryItem, ...toneStyles(tone) }}>
+      <div style={workbenchStyles.summaryItemHeader}>
+        <span style={workbenchStyles.summaryItemLabel}>{label}</span>
+        {badges ? <div style={workbenchStyles.summaryBadgeRow}>{badges}</div> : null}
+      </div>
+      <div style={{ ...workbenchStyles.summaryItemValue, ...valueStyle }}>{value}</div>
+      {meta ? <div style={workbenchStyles.summaryItemMeta}>{meta}</div> : null}
+    </div>
+  );
+}
+
 export function WorkbenchSectionHeading({
   eyebrow,
   title,
@@ -366,6 +471,30 @@ export function WorkbenchSectionHeading({
           {actions}
         </div>
       </div>
+    </div>
+  );
+}
+
+export function WorkbenchPaneGrid({
+  children,
+  style,
+  columns,
+  testId,
+}: PropsWithChildren<{
+  style?: CSSProperties;
+  columns?: CSSProperties["gridTemplateColumns"];
+  testId?: string;
+}>) {
+  return (
+    <div
+      data-testid={testId}
+      style={{
+        ...workbenchStyles.paneGrid,
+        gridTemplateColumns: columns ?? workbenchStyles.paneGrid.gridTemplateColumns,
+        ...style,
+      }}
+    >
+      {children}
     </div>
   );
 }

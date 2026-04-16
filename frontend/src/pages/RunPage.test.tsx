@@ -68,8 +68,18 @@ describe("RunPage", () => {
       expect(screen.getAllByText(/Case:.*case-001/).length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText(/Run:.*run-1/)).toBeInTheDocument();
       expect(screen.getByText("Acme")).toBeInTheDocument();
-      expect(screen.getByText("85%")).toBeInTheDocument();
+      expect(screen.getAllByText("85%").length).toBeGreaterThanOrEqual(1);
     });
+
+    const summary = screen.getByRole("region", { name: "Run summary" });
+    expect(summary).toHaveTextContent("Review state");
+    expect(summary).toHaveTextContent("Facility pack");
+    expect(summary).toHaveTextContent("fac-1");
+    expect(summary).toHaveTextContent("1 document • 1 policy section");
+    expect(summary).toHaveTextContent("High confidence");
+    expect(summary).toHaveTextContent("0 missing items");
+    expect(summary).toHaveTextContent("Started");
+    expect(summary).toHaveTextContent("Last event");
   });
 
   it("shows loading state before fetch completes", async () => {
@@ -151,6 +161,11 @@ describe("RunPage", () => {
       expect(screen.getByText("Extracted Facts")).toBeInTheDocument();
       // Right panel — history
       expect(screen.getByText("Run History")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("run-workspace-grid")).toHaveStyle({
+      gridTemplateColumns:
+        "minmax(360px, 1.35fr) minmax(320px, 1.05fr) minmax(280px, 0.9fr)",
     });
   });
 
