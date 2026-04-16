@@ -156,6 +156,13 @@ class TestApproveEndpoint:
         data = resp.json()
         assert data["recommendation"]["draft_text"] == "Edited draft."
 
+    def test_approve_preserves_empty_string_edit(self, client, tmp_runs):
+        self._seed_approval_ready()
+        resp = client.post("/runs/run-approve-test/approve", json={"draft_text": ""})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["recommendation"]["draft_text"] == ""
+
     def test_approve_not_found(self, client):
         resp = client.post("/runs/nonexistent/approve", json={})
         assert resp.status_code == 404

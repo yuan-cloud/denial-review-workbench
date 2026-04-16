@@ -169,11 +169,15 @@ def post_approve(run_id: str, body: ApproveRequest = None):
             status_code=409,
             detail=f"Run {run_id} has no draft recommendation to approve.",
         )
+    if body is None:
+        body = ApproveRequest()
     final_recommendation = {
         "action_type": existing["action_type"],
         "rationale": existing["rationale"],
-        "draft_text": (body.draft_text if body and body.draft_text
-                       else existing["draft_text"]),
+        "draft_text": (
+            body.draft_text if body.draft_text is not None
+            else existing["draft_text"]
+        ),
     }
 
     ts = datetime.now(UTC).isoformat().replace("+00:00", "Z")
