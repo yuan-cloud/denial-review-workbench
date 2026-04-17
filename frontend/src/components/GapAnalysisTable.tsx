@@ -1,6 +1,7 @@
 import type { CaseFacts, CaseFindings } from "../types";
 import {
   formatDocumentLabel,
+  palette,
   WorkbenchNotice,
   WorkbenchSectionHeading,
   workbenchStyles,
@@ -72,9 +73,9 @@ export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: P
                   }}
                 >
                   {row.present ? (
-                    <span style={{ color: "#16a34a", fontWeight: 600 }}>Present</span>
+                    <span style={{ color: palette.success, fontWeight: 600 }}>Present</span>
                   ) : (
-                    <span style={{ color: "#dc2626", fontWeight: 600 }}>Missing</span>
+                    <span style={{ color: palette.danger, fontWeight: 600 }}>Missing</span>
                   )}
                 </td>
               </tr>
@@ -88,7 +89,7 @@ export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: P
           style={{
             marginTop: 10,
             padding: "8px 10px",
-            borderLeft: "3px solid #dc2626",
+            borderLeft: `3px solid ${palette.danger}`,
           }}
         >
           <div
@@ -97,7 +98,7 @@ export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: P
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "0.04em",
-              color: "#b42318",
+              color: palette.danger,
               marginBottom: 4,
             }}
           >
@@ -108,7 +109,7 @@ export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: P
               key={i}
               style={{
                 fontSize: 13,
-                color: "#b42318",
+                color: palette.danger,
                 lineHeight: 1.45,
                 marginTop: i > 0 ? 4 : 0,
               }}
@@ -124,7 +125,7 @@ export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: P
           style={{
             marginTop: 10,
             padding: "8px 10px",
-            borderLeft: "3px solid #2563eb",
+            borderLeft: `3px solid ${palette.link}`,
           }}
         >
           <div
@@ -133,13 +134,13 @@ export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: P
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "0.04em",
-              color: "#175cd3",
+              color: palette.primary,
               marginBottom: 4,
             }}
           >
             Appeal Basis
           </div>
-          <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.45 }}>
+          <div style={{ fontSize: 13, color: palette.text, lineHeight: 1.45 }}>
             {findings.appeal_basis}
           </div>
         </div>
@@ -162,11 +163,11 @@ export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: P
                   padding: "4px 0",
                   fontSize: 12,
                   lineHeight: 1.45,
-                  color: "#667085",
+                  color: palette.textMuted,
                   cursor: "pointer",
                 }}
               >
-                <span style={{ color: "#2563eb", fontWeight: 500 }}>
+                <span style={{ color: palette.link, fontWeight: 500 }}>
                   [{formatDocumentLabel(ref.doc_id)}]
                 </span>{" "}
                 <span>&ldquo;{ref.quote}&rdquo;</span>

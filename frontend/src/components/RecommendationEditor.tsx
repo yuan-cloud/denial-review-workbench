@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Recommendation, CaseFindings } from "../types";
 import { ApiError } from "../api";
 import {
+  palette,
   WorkbenchActionBar,
   WorkbenchButton,
   WorkbenchField,
@@ -132,7 +133,7 @@ export default function RecommendationEditor({
               lineHeight: 1.5,
               resize: "vertical",
               fontFamily: "inherit",
-              background: "#fff",
+              background: palette.surface,
               boxSizing: "border-box",
             }}
           />

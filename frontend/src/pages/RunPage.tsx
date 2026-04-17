@@ -9,6 +9,7 @@ import RunHistoryPanel from "../components/RunHistoryPanel";
 import {
   BREAKPOINT_MOBILE,
   formatDocumentLabel,
+  palette,
   useMediaQuery,
   WorkbenchActionBar,
   WorkbenchButton,
@@ -358,8 +359,8 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
           zIndex: 20,
           padding: "8px 12px",
           borderRadius: 10,
-          background: "#101828",
-          color: "#ffffff",
+          background: palette.text,
+          color: palette.surface,
           textDecoration: "none",
           fontSize: 13,
           fontWeight: 600,
@@ -442,7 +443,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
                 border: "none",
                 fontSize: 12,
                 fontWeight: 600,
-                color: "#667085",
+                color: palette.textMuted,
                 cursor: "pointer",
               }}
             >
@@ -494,7 +495,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
               requires <strong>manual compliance review</strong> before any appeal
               action can be taken.
             </p>
-            <p style={{ margin: 0, fontSize: 12, color: "#667085" }}>
+            <p style={{ margin: 0, fontSize: 12, color: palette.textMuted }}>
               Approval controls are disabled. The server will reject approve requests
               for escalated runs (409).
             </p>

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { CaseDocument } from "../types";
 import {
+  palette,
   WorkbenchNotice,
   WorkbenchSectionHeading,
   WorkbenchStatusPill,
@@ -71,7 +72,7 @@ function highlightText(text: string, match: QuoteMatch): ReactNode {
   return (
     <>
       {text.slice(0, match.index)}
-      <mark style={{ backgroundColor: "#fef08a" }}>{match.matchedQuote}</mark>
+      <mark style={{ backgroundColor: palette.highlight }}>{match.matchedQuote}</mark>
       {text.slice(match.index + match.matchedQuote.length)}
     </>
   );
@@ -149,9 +150,9 @@ export default function DocumentPanel({
               key={doc.doc_id}
               id={`doc-${doc.doc_id}`}
               style={{
-                border: `1px solid ${isActive ? "#b8c3d3" : "#d6dde6"}`,
+                border: `1px solid ${isActive ? palette.borderStrong : palette.border}`,
                 borderRadius: 12,
-                background: isActive ? "#f8fafc" : "#ffffff",
+                background: isActive ? palette.surfaceMuted : palette.surface,
                 boxShadow: "0 1px 2px rgba(16, 24, 40, 0.04)",
                 padding: 14,
               }}
@@ -222,9 +223,9 @@ export default function DocumentPanel({
               >
                 <section
                   style={{
-                    border: "1px solid #d6dde6",
+                    border: `1px solid ${palette.border}`,
                     borderRadius: 12,
-                    background: "#f8fafc",
+                    background: palette.surfaceMuted,
                     padding: 14,
                   }}
                 >

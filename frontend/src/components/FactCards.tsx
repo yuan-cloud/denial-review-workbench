@@ -1,6 +1,7 @@
 import type { CaseFacts } from "../types";
 import {
   formatDocumentLabel,
+  palette,
   WorkbenchField,
   WorkbenchNotice,
   WorkbenchSectionHeading,
@@ -13,15 +14,15 @@ interface Props {
 }
 
 function confidenceColor(confidence: number): string {
-  if (confidence >= 0.8) return "#16a34a";
-  if (confidence >= 0.7) return "#ca8a04";
-  return "#dc2626";
+  if (confidence >= 0.8) return palette.success;
+  if (confidence >= 0.7) return palette.warning;
+  return palette.danger;
 }
 
 function confidenceBg(confidence: number): string {
-  if (confidence >= 0.8) return "#f0fdf4";
-  if (confidence >= 0.7) return "#fefce8";
-  return "#fef2f2";
+  if (confidence >= 0.8) return palette.successSoft;
+  if (confidence >= 0.7) return palette.warningSoft;
+  return palette.dangerSoft;
 }
 
 function confidenceLabel(confidence: number): string {
@@ -103,11 +104,11 @@ export default function FactCards({ facts, onEvidenceClick }: Props) {
                   padding: "4px 0",
                   fontSize: 12,
                   lineHeight: 1.45,
-                  color: "#667085",
+                  color: palette.textMuted,
                   cursor: "pointer",
                 }}
               >
-                <span style={{ color: "#2563eb", fontWeight: 500 }}>
+                <span style={{ color: palette.link, fontWeight: 500 }}>
                   {formatDocumentLabel(ref.doc_id)}
                 </span>
                 {": "}

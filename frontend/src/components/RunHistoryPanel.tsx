@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { RunEvent } from "../types";
 import { ApiError } from "../api";
 import {
+  palette,
   WorkbenchActionBar,
   WorkbenchButton,
   WorkbenchNotice,
@@ -28,14 +29,14 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 const EVENT_DOT_COLOR: Record<string, string> = {
-  run_started: "#6b7280",
-  documents_loaded: "#2563eb",
-  facts_extracted: "#2563eb",
-  policy_retrieved: "#2563eb",
+  run_started: palette.textMuted,
+  documents_loaded: palette.link,
+  facts_extracted: palette.link,
+  policy_retrieved: palette.link,
   analysis_completed: "#7c3aed",
-  draft_generated: "#2563eb",
-  approval_requested: "#d97706",
-  approved: "#16a34a",
+  draft_generated: palette.link,
+  approval_requested: palette.warning,
+  approved: palette.success,
 };
 
 function formatDateTime(ts: string): string {
@@ -172,7 +173,7 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
         <div style={workbenchStyles.stack}>
           {events.map((event, i) => {
             const summary = eventSummary(event);
-            const dotColor = EVENT_DOT_COLOR[event.type] ?? "#9ca3af";
+            const dotColor = EVENT_DOT_COLOR[event.type] ?? palette.textSubtle;
             const elapsed = runStartTs && i > 0 ? formatElapsed(runStartTs, event.timestamp) : null;
             return (
               <div
@@ -183,7 +184,7 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
                   gap: 12,
                   padding: "10px 0",
                   borderBottom:
-                    i < events.length - 1 ? "1px solid #eef2f6" : "none",
+                    i < events.length - 1 ? `1px solid ${palette.neutralSoft}` : "none",
                 }}
               >
                 <div
@@ -197,7 +198,7 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
                 />
                 <div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: palette.text }}>
                       {EVENT_LABELS[event.type] ?? formatEventType(event.type)}
                     </span>
                     {elapsed ? (

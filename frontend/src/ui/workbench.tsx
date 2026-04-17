@@ -6,7 +6,7 @@ import type {
   ReactNode,
 } from "react";
 
-const palette = {
+export const palette = {
   page: "#f3f5f8",
   surface: "#ffffff",
   surfaceMuted: "#f8fafc",
@@ -18,6 +18,8 @@ const palette = {
   primary: "#175cd3",
   primaryHover: "#1849a9",
   primarySoft: "#eaf2ff",
+  link: "#2563eb",
+  highlight: "#fef08a",
   success: "#027a48",
   successSoft: "#ecfdf3",
   warning: "#b54708",

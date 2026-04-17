@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { CaseListItem } from "../types";
 import { ApiError, getCases, postRun } from "../api";
 import {
+  palette,
   WorkbenchActionBar,
   WorkbenchButton,
   WorkbenchNotice,
@@ -151,7 +152,7 @@ export default function CaseListPage({ onSelectCase }: Props) {
                         <div style={{ display: "grid", gap: rowError ? 6 : 0 }}>
                           <span style={workbenchStyles.subdued}>{c.summary}</span>
                           {rowError ? (
-                            <span style={{ color: "#b42318", fontSize: 12 }}>{rowError}</span>
+                            <span style={{ color: palette.danger, fontSize: 12 }}>{rowError}</span>
                           ) : null}
                         </div>
                       </td>
