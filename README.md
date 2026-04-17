@@ -2,7 +2,7 @@
 
 **Auditable human-in-the-loop denial review for document-heavy healthcare ops**
 
-Denial review pipelines process a full case — extraction, gap analysis, draft — typically in under 15 seconds. Replay any approved run: status is preserved, no model call is made, and the JSONL log gains exactly one line. Verify it yourself: `./bench.sh`
+Denial review pipelines process a full case — extraction, gap analysis, draft — typically in under 15 seconds. Replay any approved run: status is preserved, no model call is made, and the JSONL log gains exactly one line. Verify it yourself: `./bench.sh` (pipeline) and `./scripts/replay_integrity.sh` (replay invariant)
 
 ---
 
@@ -105,6 +105,26 @@ Conflicting denial reasons trigger `should_escalate: true`. A red banner blocks 
 **Replay invariant:** The `approved` event carries `final_recommendation` — exactly what the human signed off on. Replay reconstructs this from the JSONL log without any model call.
 
 **Run logs** are append-only JSONL. Each event is typed, timestamped, and replayable. Format is one translation layer from OpenTelemetry spans.
+
+**Replay integrity proof:** `scripts/replay_integrity.sh` replays an approved run 10 times and verifies that every response is identical, `is_replay_response` is true, and the JSONL log gains zero lines. Run it against a live backend:
+
+```bash
+./scripts/replay_integrity.sh
+```
+
+```
+Replay 1: completed in 48ms, JSONL lines: 3 (unchanged) ✓
+Replay 2: completed in 50ms, JSONL lines: 3 (unchanged) ✓
+Replay 3: completed in 46ms, JSONL lines: 3 (unchanged) ✓
+Replay 4: completed in 42ms, JSONL lines: 3 (unchanged) ✓
+Replay 5: completed in 46ms, JSONL lines: 3 (unchanged) ✓
+Replay 6: completed in 51ms, JSONL lines: 3 (unchanged) ✓
+Replay 7: completed in 48ms, JSONL lines: 3 (unchanged) ✓
+Replay 8: completed in 43ms, JSONL lines: 3 (unchanged) ✓
+Replay 9: completed in 58ms, JSONL lines: 3 (unchanged) ✓
+Replay 10: completed in 46ms, JSONL lines: 3 (unchanged) ✓
+10/10 replays verified. Zero events written during replay.
+```
 
 ---
 
