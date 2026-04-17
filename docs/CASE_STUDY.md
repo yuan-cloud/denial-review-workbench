@@ -28,6 +28,8 @@ The reviewer sees extracted facts, gap analysis, source documents with evidence 
 
 `replay.py` reconstructs any prior run from the JSONL log without calling the model. Replay produces identical state: same facts, same findings, same recommendation, same approval decision. An amber REPLAY badge confirms the view is read-only reconstruction, not a live run.
 
+Note: the backend seeds `mock_run.json` snapshots into memory on startup for offline exploration (IDs like `run-case-002-mock`). These are fixed snapshots, not replays of persisted JSONL. Live demo runs produce fresh timestamped IDs with complete audit trails.
+
 ## Results
 
 Full pipeline (extraction, gap analysis, draft) completes in under 15 seconds (measured with `./bench.sh` against claude-sonnet-4-6). Escalation cases complete in under 10 seconds (2 model calls instead of 3).

@@ -177,6 +177,8 @@ Three synthetic cases cover the full decision space:
 
 Policy files live in `data/policies/`. Swapping policy packs and approval rules is how this scales across facilities — the orchestration spine stays the same.
 
+**Seeded mock runs vs. live runs:** On startup, the backend loads `mock_run.json` from each case directory into in-memory state (IDs like `run-case-002-mock`). These are fixed snapshots for offline exploration. A live demo run (`./bench.sh case-002`) produces a fresh timestamped run ID with a complete JSONL audit trail.
+
 ---
 
 ## Troubleshooting
