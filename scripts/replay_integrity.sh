@@ -29,6 +29,7 @@ count_lines() {
 
 require_cmd curl
 require_cmd jq
+require_cmd python3
 
 [ -f "$RUN_LOG" ] || fail "Missing JSONL audit log: $RUN_LOG"
 
@@ -76,9 +77,9 @@ baseline_lines=$(count_lines "$RUN_LOG")
 
 i=1
 while [ "$i" -le 10 ]; do
-    start_ts=$(date +%s)
+    start_ts=$(python3 -c "import time; print(int(time.time() * 1000))")
     http_code=$(curl -sS -o "$replay_file" -w "%{http_code}" "$BACKEND_URL/runs/$RUN_ID/replay")
-    end_ts=$(date +%s)
+    end_ts=$(python3 -c "import time; print(int(time.time() * 1000))")
 
     [ "$http_code" = "200" ] || fail "Replay $i returned HTTP $http_code"
 
@@ -106,8 +107,9 @@ while [ "$i" -le 10 ]; do
     [ "$current_lines" = "$baseline_lines" ] \
         || fail "Replay $i changed JSONL line count: expected $baseline_lines, got $current_lines"
 
-    elapsed_s=$((end_ts - start_ts))
-    printf '%s\n' "Replay $i: completed in ${elapsed_s}s, JSONL lines: $baseline_lines (unchanged) ✓"
+    elapsed_ms=$((end_ts - start_ts))
+    printf 'Replay %d: completed in %dms, JSONL lines: %s (unchanged) ✓\n' \
+        "$i" "$elapsed_ms" "$baseline_lines"
     i=$((i + 1))
 done
 
