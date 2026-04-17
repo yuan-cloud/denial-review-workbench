@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.use({ viewport: { width: 1280, height: 800 } });
+test.use({ viewport: { width: 1280, height: 900 } });
 
 test.describe("Pipeline: full approval flow", () => {
   test("case list → run review → evidence → approve → replay", async ({
@@ -12,6 +12,7 @@ test.describe("Pipeline: full approval flow", () => {
     await expect(page.getByText("case-001")).toBeVisible();
     await expect(page.getByText("case-002")).toBeVisible();
     await expect(page.getByText("case-003")).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: "docs/screenshots/01-case-list.png" });
 
     // 2. Run review on case-002 — loaded packet with policy pack label
@@ -47,6 +48,7 @@ test.describe("Pipeline: full approval flow", () => {
     ).toBeVisible();
 
     // Screenshot: three-panel run results with policy pack label visible
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: "docs/screenshots/02-run-results.png" });
 
     // 3. Evidence highlight — click first evidence ref to highlight in document
@@ -64,6 +66,7 @@ test.describe("Pipeline: full approval flow", () => {
     await expect
       .poll(() => page.evaluate(() => document.activeElement?.id ?? ""))
       .toMatch(/^doc-/);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({
       path: "docs/screenshots/03-evidence-highlight.png",
     });
@@ -86,6 +89,7 @@ test.describe("Pipeline: full approval flow", () => {
     );
 
     // Screenshot: approved badge with final recommendation
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: "docs/screenshots/04-after-approve.png" });
 
     // 5. Replay — REPLAY badge appears
@@ -96,6 +100,7 @@ test.describe("Pipeline: full approval flow", () => {
     await expect(page.getByTestId("run-live-region")).toHaveText(
       /Replay mode enabled\. Run state reconstructed from the audit log\./
     );
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: "docs/screenshots/05-replay.png" });
 
     // Navigate back
@@ -130,6 +135,7 @@ test.describe("Pipeline: full approval flow", () => {
     await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
 
     // Screenshot: full escalation state
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: "docs/screenshots/06-escalation.png" });
 
     // Replay preserves the blocked framing

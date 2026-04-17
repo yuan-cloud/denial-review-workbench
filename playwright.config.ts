@@ -9,7 +9,7 @@ export default defineConfig({
     headless: true,
     screenshot: "only-on-failure",
   },
-  outputDir: "./docs/screenshots",
+  outputDir: "./test-results",
   webServer: [
     {
       command: "cd backend && uvicorn app.main:app --port 8000",
