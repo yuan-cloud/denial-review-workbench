@@ -135,7 +135,8 @@ cd denial-review-workbench
 cp backend/.env.example backend/.env
 # add your Anthropic API key to backend/.env
 cd backend
-set -a; source .env; set +a
+# Load .env: bash/zsh: source backend/.env
+# fish: export (cat backend/.env | psub)
 pip install fastapi uvicorn anthropic pydantic
 uvicorn app.main:app --reload --port 8000
 ```
