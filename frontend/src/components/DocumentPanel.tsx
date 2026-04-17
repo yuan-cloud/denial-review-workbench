@@ -119,7 +119,7 @@ export default function DocumentPanel({
       {activeQuote && activeDocumentMeta ? (
         <div style={{ marginBottom: 12 }}>
           <WorkbenchNotice
-            title={`Evidence focus — ${activeDocumentMeta.title}`}
+            title={`Evidence focus: ${activeDocumentMeta.title}`}
             tone={activeMatch?.status === "missing" ? "warning" : "primary"}
           >
             <div style={{ display: "grid", gap: 6 }}>

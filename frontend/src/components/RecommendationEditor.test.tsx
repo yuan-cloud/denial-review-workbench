@@ -29,7 +29,7 @@ describe("RecommendationEditor", () => {
       />
     );
     expect(screen.getByText("Recommendation")).toBeInTheDocument();
-    expect(screen.getByText(/recommendation will appear here/i)).toBeInTheDocument();
+    expect(screen.getByText(/Draft generation pending/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
 

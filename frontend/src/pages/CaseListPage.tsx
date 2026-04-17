@@ -75,7 +75,7 @@ export default function CaseListPage({ onSelectCase }: Props) {
         <WorkbenchPageHeader
           eyebrow="Clinical ops workbench"
           title="Denial Review Workbench"
-          description="Triage queue — select a case to run denial review analysis."
+          description="Triage queue. Select a case to run denial review analysis."
           actions={
             runningCase ? (
               <WorkbenchStatusPill tone="primary">Run in progress</WorkbenchStatusPill>
@@ -109,7 +109,7 @@ export default function CaseListPage({ onSelectCase }: Props) {
             </div>
           ) : cases.length === 0 && !fetchError ? (
             <WorkbenchNotice tone="neutral">
-              No cases available for review. Check back later or verify the data directory.
+              No cases available. Verify the data directory contains case packets.
             </WorkbenchNotice>
           ) : (
             <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
@@ -181,7 +181,7 @@ export default function CaseListPage({ onSelectCase }: Props) {
           {runningCase ? (
             <div style={workbenchStyles.dividerTop}>
               <WorkbenchNotice tone="primary">
-                Analyzing {runningCase} — this takes 10–20 seconds...
+                Analyzing {runningCase}. Typically 10–20 seconds.
               </WorkbenchNotice>
             </div>
           ) : null}

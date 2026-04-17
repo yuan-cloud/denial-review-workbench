@@ -64,7 +64,7 @@ describe("RunHistoryPanel", () => {
       <RunHistoryPanel events={sampleEvents} isReplayResponse={false} onReplay={async () => {}} />
     );
     expect(screen.getByText("Case: case-001")).toBeInTheDocument();
-    expect(screen.getByText("1 document(s) loaded")).toBeInTheDocument();
+    expect(screen.getByText("1 document loaded")).toBeInTheDocument();
     expect(screen.getByText(/Acme/)).toBeInTheDocument();
     expect(screen.getByText(/85% confidence/)).toBeInTheDocument();
   });

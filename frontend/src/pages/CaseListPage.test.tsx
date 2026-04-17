@@ -91,7 +91,7 @@ describe("CaseListPage", () => {
     render(<CaseListPage onSelectCase={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/No cases available for review/)).toBeInTheDocument();
+      expect(screen.getByText(/No cases available/)).toBeInTheDocument();
     });
     // Table should not be rendered
     expect(screen.queryByText("Facility")).not.toBeInTheDocument();

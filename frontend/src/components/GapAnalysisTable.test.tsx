@@ -27,7 +27,7 @@ describe("GapAnalysisTable", () => {
       <GapAnalysisTable facts={null} findings={baseFindings} onEvidenceClick={() => {}} />
     );
     expect(screen.getByText("Gap Analysis")).toBeInTheDocument();
-    expect(screen.getByText(/gap analysis has not been completed yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pending gap analysis/i)).toBeInTheDocument();
   });
 
   it("shows pending state when findings is null", () => {
@@ -35,7 +35,7 @@ describe("GapAnalysisTable", () => {
       <GapAnalysisTable facts={baseFacts} findings={null} onEvidenceClick={() => {}} />
     );
     expect(screen.getByText("Gap Analysis")).toBeInTheDocument();
-    expect(screen.getByText(/gap analysis has not been completed yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pending gap analysis/i)).toBeInTheDocument();
   });
 
   it("renders requirement rows", () => {

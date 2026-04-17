@@ -56,7 +56,7 @@ describe("DocumentPanel", () => {
         activeQuote={{ doc_id: "denial-letter", quote: "physical therapy" }}
       />
     );
-    expect(screen.getByText(/Evidence focus — Denial Letter/)).toBeInTheDocument();
+    expect(screen.getByText(/Evidence focus: Denial Letter/)).toBeInTheDocument();
     expect(screen.getByText(/referenced text is highlighted/i)).toBeInTheDocument();
     const mark = document.querySelector("mark");
     expect(mark).not.toBeNull();

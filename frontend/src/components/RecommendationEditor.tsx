@@ -51,7 +51,7 @@ export default function RecommendationEditor({
       <div style={{ marginBottom: 20 }}>
         <WorkbenchSectionHeading
           title="Recommendation"
-          description="No action available — case is escalated."
+          description="No action available. Case is escalated."
         />
         <WorkbenchNotice tone="danger">
           Approval controls are disabled for escalated cases.
@@ -65,10 +65,10 @@ export default function RecommendationEditor({
       <div style={{ marginBottom: 20 }}>
         <WorkbenchSectionHeading
           title="Recommendation"
-          description="No recommendation has been generated yet."
+          description="No recommendation generated."
         />
         <WorkbenchNotice tone="neutral">
-          The recommendation will appear here after draft generation completes.
+          Draft generation pending.
         </WorkbenchNotice>
       </div>
     );
@@ -94,7 +94,7 @@ export default function RecommendationEditor({
         title="Recommendation"
         description={
           isApproved
-            ? "Approved — this is the signed final recommendation."
+            ? "Approved. Signed final recommendation."
             : "Review, edit, and finalize the drafted next action."
         }
       />

@@ -21,7 +21,7 @@ export default function GapAnalysisTable({ facts, findings, onEvidenceClick }: P
           description="Required-document coverage against the analyzed case packet."
         />
         <WorkbenchNotice tone="neutral">
-          Gap analysis has not been completed yet. Results will appear here after the analysis step finishes.
+          Pending gap analysis.
         </WorkbenchNotice>
       </div>
     );

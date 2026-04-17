@@ -279,8 +279,8 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
                   </>
                 ) : fetchNotFound ? (
                   <>
-                    Run <strong>{runId}</strong> is not available right now. Retry fetch.
-                    If it stays missing, go back to the case list and start the review again.
+                    Run <strong>{runId}</strong> was not found. Retry fetch.
+                    If still unavailable, return to the case list and start a new review.
                     {fetchError ? <div style={{ marginTop: 6 }}>{fetchError}</div> : null}
                   </>
                 ) : (
@@ -338,7 +338,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
   const inlineFetchTitle = loading
     ? "Refreshing run"
     : fetchNotFound
-      ? "Latest reload could not find the run"
+      ? "Run not found on reload"
       : "Latest reload failed";
 
   return (
@@ -461,9 +461,9 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
                   </>
                 ) : fetchNotFound ? (
                   <>
-                    The latest reload says <strong>{runId}</strong> is unavailable. The last
-                    loaded workspace is still on screen so you can keep reviewing while you
-                    decide whether to retry or go back to the queue.
+                    <strong>{runId}</strong> was not found on reload. The loaded workspace
+                    remains visible while you decide whether to retry or return to the
+                    queue.
                   </>
                 ) : (
                   <>
@@ -488,7 +488,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
         ) : null}
 
         {isEscalated && (
-          <WorkbenchNotice title="Case Escalated — Workflow Blocked" tone="danger">
+          <WorkbenchNotice title="Case Escalated: Workflow Blocked" tone="danger">
             <p style={{ margin: "0 0 6px", fontSize: 13, lineHeight: 1.5 }}>
               Conflicting denial reasons were detected during gap analysis. This case
               requires <strong>manual compliance review</strong> before any appeal

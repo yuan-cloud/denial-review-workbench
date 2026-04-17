@@ -17,7 +17,7 @@ describe("FactCards", () => {
   it("shows pending state when facts is null", () => {
     render(<FactCards facts={null} onEvidenceClick={() => {}} />);
     expect(screen.getByText("Extracted Facts")).toBeInTheDocument();
-    expect(screen.getByText(/facts have not been extracted yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pending fact extraction/i)).toBeInTheDocument();
   });
 
   it("renders payer, service, and denial reason", () => {

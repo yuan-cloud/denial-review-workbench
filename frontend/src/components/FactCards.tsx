@@ -39,7 +39,7 @@ export default function FactCards({ facts, onEvidenceClick }: Props) {
           description="Structured outputs from the first model pass."
         />
         <WorkbenchNotice tone="neutral">
-          Facts have not been extracted yet. They will appear here after the extraction step completes.
+          Pending fact extraction.
         </WorkbenchNotice>
       </div>
     );

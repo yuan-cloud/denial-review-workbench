@@ -78,7 +78,7 @@ function eventSummary(event: RunEvent): string | null {
       return `Case: ${p.case_id ?? ""}`;
     case "documents_loaded": {
       const docs = p.documents as { doc_id: string }[] | undefined;
-      return docs ? `${docs.length} document(s) loaded` : null;
+      return docs ? `${docs.length} ${docs.length === 1 ? "document" : "documents"} loaded` : null;
     }
     case "facts_extracted": {
       const facts = p.facts as { confidence?: number; payer?: string } | undefined;
@@ -90,15 +90,15 @@ function eventSummary(event: RunEvent): string | null {
     }
     case "policy_retrieved": {
       const sections = p.retrieved_policy_sections as string[] | undefined;
-      return sections ? `${sections.length} policy section(s) retrieved` : null;
+      return sections ? `${sections.length} ${sections.length === 1 ? "policy section" : "policy sections"} retrieved` : null;
     }
     case "analysis_completed": {
       const findings = p.findings as { should_escalate?: boolean; missing_items?: string[]; conflicts?: string[] } | undefined;
       if (!findings) return null;
-      if (findings.should_escalate) return "Escalated — compliance review required";
+      if (findings.should_escalate) return "Escalated: compliance review required";
       const parts: string[] = [];
       if (findings.missing_items?.length) parts.push(`${findings.missing_items.length} missing`);
-      if (findings.conflicts?.length) parts.push(`${findings.conflicts.length} conflict(s)`);
+      if (findings.conflicts?.length) parts.push(`${findings.conflicts.length} ${findings.conflicts.length === 1 ? "conflict" : "conflicts"}`);
       return parts.length > 0 ? parts.join(", ") : "No gaps found";
     }
     case "draft_generated": {
