@@ -642,6 +642,9 @@ Work is NOT complete until changes are committed. Never say "ready to commit whe
 
 ```bash
 git status                   # check what changed
+git pull --ff-only           # pull before staging to prevent
+                              # shared-index collision in hot
+                              # multi-agent worktrees
 git add <explicit files>     # stage code changes — never git add -A in shared worktree
 br sync --flush-only         # export beads to JSONL
 git add .beads/              # stage beads changes
