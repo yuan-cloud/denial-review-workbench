@@ -61,16 +61,7 @@ If your change contradicts the spec, stop and flag the conflict. Do not silently
 
 Denial Review Workbench is a thin, legible, operator-ready auditable workflow for document-heavy healthcare denial review.
 
-One flow. One knife.
-
 The JSONL event log is truth. The UI is a projection of that truth. The human reviewer is always in the loop and always in control.
-
-**What this is not:**
-- Not a platform
-- Not an agent control room
-- Not a swarm demo
-- Not HIPAA compliant
-- Not the Agent Flywheel product
 
 ---
 
