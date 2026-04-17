@@ -180,19 +180,24 @@ def post_approve(run_id: str, body: ApproveRequest = None):
         ),
     }
 
+    approved_by = body.approved_by
+
     ts = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    event_payload = {"final_recommendation": final_recommendation}
+    if approved_by is not None:
+        event_payload["approved_by"] = approved_by
     approved_event = {
         "type": "approved",
         "timestamp": ts,
-        "payload": {"final_recommendation": final_recommendation},
+        "payload": event_payload,
     }
     state_dict["events"].append(approved_event)
     state_dict["status"] = "approved"
     state_dict["recommendation"] = final_recommendation
+    state_dict["approved_by"] = approved_by
     state.update(run_id, state_dict)
 
-    append_event(run_id, "approved", {"final_recommendation": final_recommendation},
-                 timestamp=ts)
+    append_event(run_id, "approved", event_payload, timestamp=ts)
 
     return RunStatus.model_validate(state_dict).model_copy(
         update={"is_replay_response": False}

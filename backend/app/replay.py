@@ -38,6 +38,7 @@ def replay_run(run_id: str) -> RunStatus | None:
         "facts": None,
         "findings": None,
         "recommendation": None,
+        "approved_by": None,
         "events": events,
     }
 
@@ -69,6 +70,7 @@ def replay_run(run_id: str) -> RunStatus | None:
 
         elif event_type == "approved":
             state["recommendation"] = payload.get("final_recommendation")
+            state["approved_by"] = payload.get("approved_by")
             state["status"] = "approved"
 
     state["status"] = resolve_status(state)

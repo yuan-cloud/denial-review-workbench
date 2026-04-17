@@ -51,6 +51,7 @@ class RunCreateRequest(BaseModel):
 
 class ApproveRequest(BaseModel):
     draft_text: Optional[str] = None
+    approved_by: Optional[str] = None
 
 
 class RunEvent(BaseModel):
@@ -69,5 +70,6 @@ class RunStatus(BaseModel):
     facts: Optional[CaseFacts] = None
     findings: Optional[CaseFindings] = None
     recommendation: Optional[Recommendation] = None
+    approved_by: Optional[str] = None
     events: list[RunEvent] = Field(default_factory=list)
     is_replay_response: bool = False
