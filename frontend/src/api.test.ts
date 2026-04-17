@@ -123,24 +123,24 @@ describe("postRun", () => {
 });
 
 describe("postApprove", () => {
-  it("posts to /runs/{runId}/approve with draft_text", async () => {
+  it("posts to /runs/{runId}/approve with draft_text and approved_by", async () => {
     const data = { run_id: "r1", status: "approved" };
     mockFetch.mockResolvedValueOnce(okResponse(data));
 
-    const result = await postApprove("r1", "edited text");
+    const result = await postApprove("r1", "edited text", "reviewer-1");
     expect(result).toEqual(data);
     expect(mockFetch).toHaveBeenCalledWith("http://localhost:8000/runs/r1/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draft_text: "edited text" }),
+      body: JSON.stringify({ draft_text: "edited text", approved_by: "reviewer-1" }),
     });
   });
 
-  it("sends null draft_text when omitted", async () => {
+  it("sends null draft_text and approved_by when omitted", async () => {
     mockFetch.mockResolvedValueOnce(okResponse({ status: "approved" }));
     await postApprove("r1");
     const call = mockFetch.mock.calls[0];
-    expect(JSON.parse(call[1].body)).toEqual({ draft_text: null });
+    expect(JSON.parse(call[1].body)).toEqual({ draft_text: null, approved_by: null });
   });
 
   it("throws on 409", async () => {

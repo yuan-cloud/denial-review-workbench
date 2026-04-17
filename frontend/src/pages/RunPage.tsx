@@ -185,7 +185,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
 
   const handleApprove = useCallback(
     async (draftText: string) => {
-      const updated = await postApprove(runId, draftText);
+      const updated = await postApprove(runId, draftText, "local-reviewer");
       setRun(updated);
     },
     [runId]

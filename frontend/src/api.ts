@@ -120,12 +120,16 @@ export async function postRun(caseId: string): Promise<RunStatus> {
 
 export async function postApprove(
   runId: string,
-  draftText?: string
+  draftText?: string,
+  approvedBy?: string
 ): Promise<RunStatus> {
   return requestJson<RunStatus>(`/runs/${runId}/approve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ draft_text: draftText ?? null }),
+    body: JSON.stringify({
+      draft_text: draftText ?? null,
+      approved_by: approvedBy ?? null,
+    }),
   });
 }
 

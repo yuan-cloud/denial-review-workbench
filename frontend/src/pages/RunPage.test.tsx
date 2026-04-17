@@ -49,6 +49,7 @@ const baseRun: RunStatus = {
     rationale: "All clear",
     draft_text: "Approve this.",
   },
+  approved_by: null,
   events: [
     { type: "run_started", timestamp: "2026-04-15T10:00:00Z", payload: { case_id: "case-001" } },
   ],

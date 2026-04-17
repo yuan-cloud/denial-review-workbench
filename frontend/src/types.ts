@@ -48,6 +48,7 @@ export interface RunStatus {
   facts: CaseFacts | null;
   findings: CaseFindings | null;
   recommendation: Recommendation | null;
+  approved_by: string | null;
   events: RunEvent[];
   is_replay_response: boolean;
 }
