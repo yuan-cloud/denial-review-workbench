@@ -167,7 +167,7 @@ export default function CaseListPage({ onSelectCase }: Props) {
                           disabled={isRunning}
                           size="sm"
                         >
-                          {isRunning ? "Analyzing..." : "Run Review"}
+                          {isRunning ? "Analyzing\u2026" : "Run Review"}
                         </WorkbenchButton>
                       </td>
                     </tr>

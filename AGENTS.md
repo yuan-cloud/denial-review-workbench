@@ -107,6 +107,26 @@ DATA_DIR = REPO_ROOT / "data"
 
 Use `DATA_DIR` everywhere. Never use bare string paths.
 
+Live pipeline calls also need `ANTHROPIC_API_KEY` in the current shell environment. The project owner may create `backend/.env` manually, but agents must never create, overwrite, or commit that file.
+
+Owner-only setup:
+
+```bash
+echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" > \
+    /data/projects/denial-review-workbench/backend/.env
+```
+
+Agent usage before any `POST /runs` call that needs the live model:
+
+```bash
+set -a
+source /data/projects/denial-review-workbench/backend/.env
+set +a
+# Verify: echo "Key: $([ -n "$ANTHROPIC_API_KEY" ] && echo YES || echo NO)"
+```
+
+Treat `backend/.env` as operational state only. Source it when needed; do not author it yourself.
+
 ---
 
 ## PORT CONFIGURATION (CRITICAL — must stay in sync)
@@ -720,7 +740,10 @@ Plan (br) → Coordinate (Agent Mail) → Execute (NTM + Agents) → Remember (C
 - [ ] Back button returns to case list without hard reload
 - [ ] Security grep returns empty:
   ```bash
-  grep -r "PHI\|patient_name\|ssn\|date_of_birth" \
+  # Use absolute path — some environments alias grep to
+  # ripgrep (rg), which uses different flag syntax and
+  # silently fails with --include flags
+  /usr/bin/grep -rE "PHI|patient_name|ssn|date_of_birth" \
       data/ backend/ frontend/src/ \
       --include="*.py" --include="*.tsx" \
       --include="*.json" --include="*.md"

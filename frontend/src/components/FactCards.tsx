@@ -110,7 +110,7 @@ export default function FactCards({ facts, onEvidenceClick }: Props) {
                 <span style={{ color: "#2563eb", fontWeight: 500 }}>
                   {formatDocumentLabel(ref.doc_id)}
                 </span>
-                {" — "}
+                {": "}
                 <span>&ldquo;{ref.quote}&rdquo;</span>
               </button>
             ))}

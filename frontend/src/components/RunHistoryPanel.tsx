@@ -86,7 +86,7 @@ function eventSummary(event: RunEvent): string | null {
       const parts: string[] = [];
       if (facts.payer) parts.push(facts.payer);
       if (typeof facts.confidence === "number") parts.push(`${(facts.confidence * 100).toFixed(0)}% confidence`);
-      return parts.length > 0 ? parts.join(" — ") : null;
+      return parts.length > 0 ? parts.join(" • ") : null;
     }
     case "policy_retrieved": {
       const sections = p.retrieved_policy_sections as string[] | undefined;

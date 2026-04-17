@@ -168,7 +168,7 @@ describe("CaseListPage", () => {
     await userEvent.click(buttons[0]);
 
     // Row being analyzed
-    expect(screen.getByText("Analyzing...")).toBeInTheDocument();
+    expect(screen.getByText("Analyzing\u2026")).toBeInTheDocument();
     expect(screen.getByText(/Analyzing case-001/)).toBeInTheDocument();
 
     // Other rows remain enabled — second Run Review button still exists and is not disabled
