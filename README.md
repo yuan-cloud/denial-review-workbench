@@ -2,7 +2,7 @@
 
 **Auditable human-in-the-loop denial review for document-heavy healthcare ops**
 
-Denial review pipelines process a full case — extraction, gap analysis, draft — typically in under 15 seconds. Replay any approved run: status is preserved, no model call is made, and the JSONL log gains exactly one line. Verify it yourself: `./bench.sh` (pipeline) and `./scripts/replay_integrity.sh` (replay invariant)
+Denial review pipelines process a full case — extraction, gap analysis, draft — typically in under 15 seconds. Replay any approved run: status is preserved, no model call is made, and the JSONL log is unchanged. Verify it yourself: `./bench.sh` (pipeline) and `./scripts/replay_integrity.sh` (replay invariant)
 
 ---
 
@@ -104,7 +104,7 @@ Conflicting denial reasons trigger `should_escalate: true`. A red banner blocks 
 
 **Replay invariant:** The `approved` event carries `final_recommendation` — exactly what the human signed off on. Replay reconstructs this from the JSONL log without any model call.
 
-**Run logs** are append-only JSONL. Each event is typed, timestamped, and replayable. Format is one translation layer from OpenTelemetry spans.
+**Run logs** are append-only JSONL. Each event carries a type, ISO 8601 timestamp, and full payload sufficient for deterministic replay.
 
 **Replay integrity proof:** `scripts/replay_integrity.sh` replays an approved run 10 times and verifies that every response is identical, `is_replay_response` is true, and the JSONL log gains zero lines. Run it against a live backend:
 
@@ -155,8 +155,8 @@ cd denial-review-workbench
 cp backend/.env.example backend/.env
 # add your Anthropic API key to backend/.env
 cd backend
-# Load .env: bash/zsh: source backend/.env
-# fish: export (cat backend/.env | psub)
+# Load .env: bash/zsh: source .env
+# fish: export (cat .env | psub)
 pip install fastapi uvicorn anthropic pydantic
 uvicorn app.main:app --reload --port 8000
 ```
@@ -222,10 +222,13 @@ Built with multiple AI coding agents (Claude Code, Codex) working in parallel fr
 ## Security
 
 ```bash
-grep -r "PHI\|patient_name\|ssn\|date_of_birth" \
-  data/ backend/ frontend/src/ \
-  --include="*.py" --include="*.tsx" \
-  --include="*.json" --include="*.md"
+# Use absolute path — some environments alias grep to
+# ripgrep (rg), which uses different flag syntax and
+# silently fails with --include flags
+/usr/bin/grep -rE "PHI|patient_name|ssn|date_of_birth" \
+    data/ backend/ frontend/src/ \
+    --include="*.py" --include="*.tsx" \
+    --include="*.json" --include="*.md"
 ```
 
 Returns empty. No patient identifiers in any synthetic case data.
