@@ -2,7 +2,7 @@
 
 **Auditable human-in-the-loop denial review for document-heavy healthcare ops**
 
-Denial review pipelines process a full case — extraction, gap analysis, draft — typically in under 15 seconds. Replay any approved run: status is preserved, no model call is made, and the JSONL log is unchanged. Verify it yourself: `./bench.sh` (pipeline) and `./scripts/replay_integrity.sh` (replay invariant)
+Denial review pipelines process a full case — extraction, gap analysis, draft — typically in under 15 seconds. Replay any approved run: status is preserved, no model call is made, and the JSONL log is unchanged. Verify it yourself: `./bench.sh` (pipeline), `./scripts/replay_integrity.sh` (replay invariant), and `./scripts/export_to_vifei.sh` (share-safe Vifei export)
 
 ---
 
@@ -125,6 +125,24 @@ Replay 9: completed in 58ms, JSONL lines: 3 (unchanged) ✓
 Replay 10: completed in 46ms, JSONL lines: 3 (unchanged) ✓
 10/10 replays verified. Zero events written during replay.
 ```
+
+**Vifei export proof:** `scripts/export_to_vifei.sh` normalizes a workbench run into Vifei's `CommittedEvent` format and produces a share-safe bundle via `vifei export`. The workbench JSONL is not Vifei EventLog — the script bridges the two schemas without modifying the source log. The bridge contract is documented in `docs/vifei-bridge-contract.md`.
+
+```bash
+./scripts/export_to_vifei.sh run-case-002-20260416075553
+```
+
+```
+Normalized 8 events → out/run-case-002-20260416075553.vifei.jsonl
+Running: vifei export out/run-case-002-20260416075553.vifei.jsonl --share-safe --output out/run-case-002-20260416075553.tar.zst
+{"code":"OK","data":{"blob_count":0,"bundle_hash":"20f96940ae97c23ad7b74f2f3793c0c775bb58ca29af7c418399d49ebfa3d569","event_count":8},"exit_code":0,"message":"Export completed successfully.","ok":true,"schema_version":"vifei-cli-robot-v1.1"}
+
+Export succeeded.
+  Bundle:     out/run-case-002-20260416075553.tar.zst
+  Bundle size: 2131 bytes
+```
+
+The bundle is a deterministic `tar.zst` archive with a BLAKE3 hash. Escalated runs also export (5 source events normalize to 6 with a synthetic `RunEnd`). Mock and partial runs are rejected with explicit messages. If the `vifei` binary is not installed, the script still produces the normalized JSONL and prints build instructions.
 
 ---
 
