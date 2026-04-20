@@ -140,7 +140,7 @@ log alone, with no external lookups.
 | `policy_retrieved` | retrieved_policy_sections[] | After policy search |
 | `analysis_completed` | findings (CaseFindings) | After model call 2 |
 | `draft_generated` | recommendation (Recommendation) | After model call 3 (non-escalation only) |
-| `approval_requested` | {} | Terminal event for non-escalation runs |
+| `approval_requested` | {} | End of pipeline, awaiting human approval |
 | `approved` | final_recommendation | After human approval |
 
 The `approved` event carries `final_recommendation`: the human-reviewed,

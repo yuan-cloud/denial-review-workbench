@@ -77,7 +77,7 @@ Strengths:
 - Frontend tests mock only `fetch` (browser boundary), not internal application logic.
 
 Acceptable mocks:
-- Anthropic API is mocked in backend unit tests. This is compensated by the live integration test suite (`test_live_pipeline.py`) that hits the real API with real case packets.
+- Anthropic API is mocked in backend unit tests. This is compensated by the live integration test suite (`test_integration.py`) that hits the real API with real case packets.
 
 Pre-existing gaps (not introduced by bd-2a5 work):
 - API error paths (non-200 responses from `/cases`, `/runs`) lack dedicated backend unit tests for edge status codes.
