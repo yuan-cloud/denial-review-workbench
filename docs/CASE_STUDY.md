@@ -36,6 +36,18 @@ Full pipeline (extraction, gap analysis, draft) completes in under 15 seconds (m
 
 Replay reconstructs any approved run in milliseconds. No model call, no network dependency. The JSONL log gains exactly one event per pipeline stage.
 
+## Evidence Export
+
+The workbench JSONL log and replay system prove what happened within the workbench. `scripts/export_to_vifei.sh` produces a secondary proof artifact for external consumption.
+
+**What it consumes.** A completed workbench run file (`data/runs/{run_id}.jsonl`). The script validates that the run is complete (approved or escalated) and rejects mock runs, partial runs, and pending-approval runs with specific error messages.
+
+**What it emits.** A deterministic `tar.zst` bundle produced by `vifei export --share-safe`. The bundle contains the normalized event log, a manifest with BLAKE3 digests, and a share-safe scanner report confirming no secrets were included. The bundle hash is deterministic: the same input always produces the same hash.
+
+**What the bundle proves.** The workbench's own JSONL log records domain workflow truth (what the model extracted, what the reviewer approved). The Vifei bundle adds a share-safe packaging layer: it normalizes workbench events into Vifei's `CommittedEvent` schema, applies a secret scanner, and produces a sealed archive with cryptographic digests. The bundle can be shared or archived independently of the workbench backend.
+
+**Boundary.** The Vifei bridge is export-only. The workbench never imports from Vifei. The original JSONL is never modified during export (the script verifies source line counts before and after normalization). The bridge was not part of the original frozen sprint plan; it was added as a post-sprint proof-packaging layer.
+
 **Verify it:**
 
 ```bash
