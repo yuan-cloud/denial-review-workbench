@@ -99,3 +99,48 @@ no regressions from bd-2a5 work. Pre-existing testing infrastructure gaps
 (API error path coverage, structured logging) are noted above for future
 prioritization but do not warrant child beads under bd-2a5 since they are
 unrelated to the hardening scope.
+
+---
+
+## Post-Bridge Addendum (2026-04-20)
+
+After the original retrospective, the following work landed:
+
+**Vifei bridge (bd-ky8 epic):**
+- `scripts/export_to_vifei.sh` normalizes workbench JSONL into Vifei
+  `CommittedEvent` schema and produces deterministic `tar.zst` bundles
+  via `vifei export --share-safe`.
+- `docs/vifei-bridge-contract.md` specifies the full normalization
+  contract (event mapping, tier assignment, support matrix).
+- Proven against real runs: approved bundle hash
+  `20f96940ae97c23ad7b74f2f3793c0c775bb58ca29af7c418399d49ebfa3d569`,
+  escalated bundle hash
+  `84e3417f93b43f149703e9f675f7b2315e06196820d524558a06730c53446a17`.
+
+**Documentation closeout (bd-2v2 epic):**
+- `docs/brief.md` — standalone project brief (purpose, proof points,
+  scope boundaries).
+- `docs/architecture.md` — standalone technical architecture document
+  with file:line references verified against current code.
+- `docs/demo-script.md` — operator walkthrough (automated and manual
+  arcs, fallback, verification checklist).
+- `docs/FROZEN_BUILD_PLAN.md` — stable entrypoint resolving the naming
+  drift between the plan's self-references and the actual filename.
+- README operational snippets corrected (env path, security grep,
+  OTel claim removed, replay claim fixed).
+- CASE_STUDY updated with Evidence Export section explaining the Vifei
+  bridge boundary.
+
+**Impact on earlier conclusions:**
+- De-slopify: The new docs (brief, architecture, demo-script, CASE_STUDY
+  update) were written with the same copy discipline. No slop introduced.
+- Reality check: All original DoD items still pass. The Vifei bridge
+  adds proof surfaces (export, bundle hashes) that were not part of the
+  original DoD but strengthen the audit story.
+- Testing rigor: The export script validates input (rejects mock/partial/
+  pending runs) and verifies source JSONL is unmodified after
+  normalization. The pre-existing testing gaps noted above remain
+  unchanged.
+
+The original three-skill verdict stands. The post-bridge work extends
+the project's proof surface without regressing any earlier quality gate.
