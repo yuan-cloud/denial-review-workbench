@@ -139,6 +139,60 @@ class TestCase002LivePipeline:
 
 
 @skip_if_no_key
+class TestCase001LiveApproval:
+    """bd-ijm: case-001 happy path — all docs present, high confidence, approve."""
+
+    @pytest.fixture(scope="class")
+    def run_result(self):
+        r = httpx.post(
+            f"{BASE}/runs",
+            json={"case_id": "case-001"},
+            timeout=TIMEOUT,
+        )
+        assert r.status_code == 201, f"POST /runs failed: {r.status_code} {r.text}"
+        return r.json()
+
+    def test_status_approval_requested(self, run_result):
+        assert run_result["status"] == "approval_requested"
+
+    def test_confidence_high(self, run_result):
+        expected = _load_expected("case-001")
+        assert run_result["facts"]["confidence"] >= expected["expected_confidence_min"]
+
+    def test_action_type_approve(self, run_result):
+        expected = _load_expected("case-001")
+        assert run_result["recommendation"]["action_type"] == expected["expected_action_type"]
+
+    def test_no_missing_items(self, run_result):
+        expected = _load_expected("case-001")
+        assert run_result["findings"]["missing_items"] == expected["expected_missing_items"]
+
+    def test_not_escalated(self, run_result):
+        assert run_result["findings"]["should_escalate"] is False
+
+    def test_approve_then_verify(self, run_result):
+        run_id = run_result["run_id"]
+
+        r = httpx.post(
+            f"{BASE}/runs/{run_id}/approve",
+            json={"draft_text": "Case-001 integration test approved."},
+            timeout=10.0,
+        )
+        assert r.status_code == 200
+        approved = r.json()
+        assert approved["status"] == "approved"
+        assert approved["recommendation"]["draft_text"] == "Case-001 integration test approved."
+
+        # Double-approve should 409
+        r2 = httpx.post(
+            f"{BASE}/runs/{run_id}/approve",
+            json={},
+            timeout=10.0,
+        )
+        assert r2.status_code == 409
+
+
+@skip_if_no_key
 class TestCase003LiveEscalation:
     """bd-38p.5.3: case-003 escalation path and approve 409."""
 
