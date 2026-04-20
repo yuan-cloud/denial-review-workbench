@@ -552,11 +552,31 @@ The `agent-cassette` output format is schema-divergent from the Vifei cassette
 importer. Routing through agent-cassette is **not** the first bridge target.
 This may be revisited if the schemas converge.
 
-### 10.2 incident-pack
+### 10.2 incident-pack — evaluated and declined (bd-ky8.6)
 
-`vifei incident-pack` is a two-input comparison workflow (two positional
-`PathBuf` args, per `cli_contract.rs`). The workbench produces single runs.
-`incident-pack` is deferred to bd-ky8.6.
+`vifei incident-pack` is a two-input deterministic comparison workflow
+(`cli_contract.rs:98-118`). It takes two EventLog JSONL files (left, right)
+and produces a divergence report.
+
+**Decision: not applicable for this project.**
+
+The workbench produces one run per case. There is no natural two-input
+comparison that is both real and non-trivial:
+- Comparing two runs of the same case shows model output variation, which
+  is expected and not a useful proof artifact.
+- Comparing runs of different cases is not meaningful — different inputs,
+  different facts, different outcomes.
+- Comparing the same run exported twice is a tautology (the normalization
+  is deterministic).
+
+The single-run `export --share-safe` path is the right stopping point. The
+workbench proof story is: one case, one pipeline, one human decision, one
+audit trail, one share-safe bundle. `incident-pack` would require inventing
+a scenario to demonstrate, not documenting a real workflow.
+
+If a real comparative use case emerges later (e.g., regression testing across
+policy versions), the infrastructure is already in place: produce two
+normalized JSONL files and run `vifei incident-pack left.jsonl right.jsonl`.
 
 ### 10.3 Bidirectional sync
 
@@ -601,3 +621,4 @@ Vifei repo at `/data/projects/PanopticonAliveca2.5`:
 | 2026-04-19 | SilentPeak  | Initial contract from bd-ky8.1 definition |
 | 2026-04-19 | SilentPeak  | Revised: grounded in local Vifei repo (`/data/projects/PanopticonAliveca2.5`). Fixed tiers to A/B/C, payload to tagged enum (RunStart/RunEnd/Generic), removed `references` field, added `source_seq`/`payload_ref`/`synthesized`, fixed export CLI to positional arg + tar.zst output, updated binary instructions to point at local repo, added exit codes, added verification source table. |
 | 2026-04-20 | SilentPeak  | Fixed Generic/Tier A issue: Generic events now Tier B per Vifei importer convention (`cassette.rs:260`, `anthropic_messages.rs:184`, `projection.rs:1193-1203`). Only typed variants (RunStart, RunEnd) get Tier A. Updated section 4.6, samples 6.2/6.4, algorithm 8.3. |
+| 2026-04-20 | SilentPeak  | Evaluated incident-pack (bd-ky8.6): declined. No natural two-input comparison exists for this project. Updated section 10.2 with full rationale. |
