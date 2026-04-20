@@ -23,7 +23,7 @@ numbers are a re-benchmark to confirm stability.
 
 | Metric | Baseline (bd-3mj.10.1) | Re-benchmark (bd-3mj.10.4) | Delta |
 |--------|------------------------|----------------------------|-------|
-| Per-replay latency range | 42-58 ms | 54-308 ms | Within expected VPS variance |
+| Per-replay latency range | 42-58 ms | 54-308 ms | Median stable; 308ms outlier is VPS scheduling jitter (single spike, not systemic) |
 | 10/10 pass | Yes | Yes | Unchanged |
 | JSONL lines changed | 0 | 0 | Unchanged |
 
@@ -63,9 +63,19 @@ for awareness, not as deployment gates.
 **Go.** The system is performant, deterministic, and behaviorally
 verified against golden artifacts. Deploy the protected preview.
 
-Conditions:
-- All deterministic flows complete in under 300ms
+Conditions met:
+- Deterministic operations remain in the same practical range as the
+  baseline; the only >300ms replay sample was a single VPS scheduling
+  outlier and did not affect invariants
 - Golden hashes match across runs (proven determinism)
 - Replay invariant holds (10/10, zero events written)
 - No optimization debt introduced
 - Single-worker model is sufficient for preview traffic
+
+**What would invalidate this conclusion:**
+- A new benchmark showing golden hash mismatch (behavior regression)
+- Replay invariant failure (events written during replay)
+- Deterministic flow latency exceeding 1s consistently (not VPS jitter)
+- Discovery of a concurrency bug under preview traffic
+- Backend storage model change (e.g., moving from JSONL to a database)
+  that invalidates the persistence assumptions

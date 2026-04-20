@@ -11,17 +11,22 @@
 The workbench has two distinct latency regimes. Mixing them would
 produce misleading numbers.
 
-### Deterministic (repo-controlled, no network)
+### Deterministic output (repo-controlled logic)
 
-These flows are fully local and produce identical output every time.
-They are valid optimization targets.
+These flows produce identical output every time. Wall time varies with
+VPS load, but the output (hashes, event counts, invariants) is fixed.
 
-| Surface | What it does | Dominant cost |
-|---------|-------------|---------------|
-| Replay integrity | 10x replay via HTTP against local backend | JSONL read + JSON serialize |
-| Vifei normalization | Python: parse JSONL → emit CommittedEvent JSONL | JSON parse + datetime math |
-| Vifei export | Rust: read JSONL → share-safe scan → tar.zst bundle | I/O + zstd compression |
-| Health endpoint | Backend liveness check | Trivial |
+| Surface | What it does | Dominant cost | Network? |
+|---------|-------------|---------------|----------|
+| Replay integrity | 10x replay via HTTP against local backend | JSONL read + JSON serialize | Local loopback |
+| Vifei normalization | Python: parse JSONL → emit CommittedEvent JSONL | JSON parse + datetime math | None |
+| Vifei export | Rust: read JSONL → share-safe scan → tar.zst bundle | I/O + zstd compression | None |
+| Health endpoint | Backend liveness check | Trivial | Local loopback |
+
+**Prerequisites:** Backend must be running (`uvicorn` on port 8000) for
+replay and health baselines. `BACKEND_URL` defaults to
+`http://localhost:8000`. Vifei binary must be built for export baselines
+(see `docs/vifei-bridge-contract.md` section 9).
 
 ### Model/network-dominated (not optimization targets yet)
 
@@ -151,3 +156,16 @@ Commands:
 # Bundle hash check (should match golden)
 # The script surfaces the hash in its output
 ```
+
+---
+
+## 6. What Would Make This Baseline Outdated
+
+- Changes to `replay.py` that alter the reconstructed `RunStatus` shape
+  (golden replay hash would change).
+- Changes to the normalizer in `scripts/export_to_vifei.sh` that alter
+  the normalized JSONL output (golden bundle hash would change).
+- Changes to the Vifei binary that alter bundle creation determinism
+  (zstd level, tar entry ordering, manifest format).
+- Moving to a different VPS or significantly different hardware (wall
+  time ranges would shift, but golden hashes should remain stable).

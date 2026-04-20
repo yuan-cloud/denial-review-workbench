@@ -605,12 +605,21 @@ Vifei repo at `/data/projects/PanopticonAliveca2.5`:
 | 5.4 Exit codes | `crates/vifei-tui/src/cli_contract.rs` lines 146-155 |
 | 6.x Sample records | `docs/assets/readme/sample-eventlog.jsonl` (format reference) |
 
-**Remaining assumptions requiring runtime verification:**
-- Vifei `export` accepts a JSONL file with `CommittedEvent` records produced
-  outside its own append writer (the normalizer constructs them directly).
-  If `export` validates provenance, this may need adjustment.
-- The share-safe scanner behavior on workbench-specific content (e.g., clinical
-  notes text in `Generic.data.payload_json`) — unlikely to trigger but untested.
+**Resolved assumptions (verified in bd-ky8.7, commit `6138e24`):**
+- Vifei `export` accepts externally constructed `CommittedEvent` records.
+  Confirmed: the normalizer's output was accepted without provenance errors.
+- The share-safe scanner passes on workbench clinical text content in
+  `Generic.data.payload_json`. Confirmed: no refusal on either approved
+  or escalated runs.
+
+**What would make this contract outdated:**
+- Changes to `EventPayload` variants in Vifei's `event.rs` (new required fields,
+  removed variants, changed serialization).
+- Changes to the `vifei export` CLI contract (different flags, different bundle format).
+- Changes to the workbench's event emission sequence in `pipeline.py` (new event
+  types, changed payload shapes).
+- Addition of a `run_escalated` event to existing case-003 runs (would make the
+  synthetic RunEnd logic in section 4.7 produce a duplicate).
 
 ---
 
@@ -622,3 +631,4 @@ Vifei repo at `/data/projects/PanopticonAliveca2.5`:
 | 2026-04-19 | SilentPeak  | Revised: grounded in local Vifei repo (`/data/projects/PanopticonAliveca2.5`). Fixed tiers to A/B/C, payload to tagged enum (RunStart/RunEnd/Generic), removed `references` field, added `source_seq`/`payload_ref`/`synthesized`, fixed export CLI to positional arg + tar.zst output, updated binary instructions to point at local repo, added exit codes, added verification source table. |
 | 2026-04-20 | SilentPeak  | Fixed Generic/Tier A issue: Generic events now Tier B per Vifei importer convention (`cassette.rs:260`, `anthropic_messages.rs:184`, `projection.rs:1193-1203`). Only typed variants (RunStart, RunEnd) get Tier A. Updated section 4.6, samples 6.2/6.4, algorithm 8.3. |
 | 2026-04-20 | SilentPeak  | Evaluated incident-pack (bd-ky8.6): declined. No natural two-input comparison exists for this project. Updated section 10.2 with full rationale. |
+| 2026-04-20 | SilentPeak  | Excellence pass: resolved section 11 assumptions (confirmed in bd-ky8.7). Added staleness signals ("what would make this outdated"). |

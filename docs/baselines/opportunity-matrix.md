@@ -96,10 +96,19 @@ targets. They should be measured after deployment, not guessed now.
 
 ## Conclusion
 
-The current system is fast enough. Optimization energy should go toward
-deployment correctness (single-worker safety, JSONL persistence, CORS
-alignment) rather than shaving milliseconds off flows that already
-complete in under 300ms.
+No optimization is warranted. The highest-scoring opportunity (1.8) is
+a proof script that runs once per demo, not a user-facing hot path.
+The actual user-visible latency is the Anthropic API pipeline (10-20s),
+which is external and not addressable from this repo.
 
-If a future benchmark shows a real regression against the golden baselines
-in `pre-deploy-baselines.md`, revisit this matrix.
+**What would change this conclusion:**
+- A new flow with latency above 500ms that is user-facing and
+  repo-controlled (not model-call-dominated).
+- A deployment environment where Python startup (~60ms) or vifei
+  binary startup (~250ms) becomes a cold-start bottleneck (e.g.,
+  per-request serverless invocation).
+- Multi-user traffic revealing contention in the single-worker
+  `uvicorn` process or the in-memory `run_states` dict.
+
+Until one of those triggers fires, re-measuring against
+`pre-deploy-baselines.md` is sufficient.
