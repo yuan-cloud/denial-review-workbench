@@ -8,6 +8,7 @@ import {
   postRun,
   resolveApiBase,
 } from "./api";
+import type { CaseListItem } from "./types";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -53,7 +54,7 @@ describe("getCases", () => {
         expected_path_type: "missing_documents",
         summary: "Signed physician order missing and progress notes are stale.",
       },
-    ];
+    ] satisfies CaseListItem[];
     mockFetch.mockResolvedValueOnce(okResponse(data));
 
     const result = await getCases();

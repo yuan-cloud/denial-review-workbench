@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import CaseListPage from "./CaseListPage";
+import type { CaseListItem } from "../types";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -33,7 +34,7 @@ const fullCases = [
     expected_path_type: "missing_documents",
     summary: "Packet missing a physician order for PT authorization.",
   },
-];
+] satisfies CaseListItem[];
 
 beforeEach(() => {
   mockFetch.mockReset();
