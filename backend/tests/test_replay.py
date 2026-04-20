@@ -192,3 +192,54 @@ class TestIsReplayResponseAbsentFromJSONL:
         assert "is_replay_response" not in raw, (
             "is_replay_response found in raw JSONL content"
         )
+
+
+class TestMalformedJSONLResilience:
+    """bd-3pw: replay_run must reconstruct valid events from JSONL with corrupted lines."""
+
+    def test_replay_skips_corrupted_lines_and_reconstructs_valid_events(self, tmp_runs):
+        """Write a valid JSONL sequence with a corrupted line mid-stream.
+
+        Verifies replay_run still produces a valid RunStatus from the
+        surrounding valid events.
+        """
+        run_id = "run-corrupted"
+        jsonl_path = tmp_runs / f"{run_id}.jsonl"
+
+        # Write events manually with a corrupted line between events 2 and 3
+        valid_events = [
+            {"type": "run_started", "timestamp": "2026-04-16T10:00:00Z",
+             "payload": {"run_id": run_id, "case_id": "case-001", "facility_id": "fac-a"}},
+            {"type": "documents_loaded", "timestamp": "2026-04-16T10:00:01Z",
+             "payload": {"documents": [{"doc_id": "d1", "type": "denial_letter", "text": "denied"}]}},
+            {"type": "facts_extracted", "timestamp": "2026-04-16T10:00:02Z",
+             "payload": {"facts": {"payer": "Acme", "service_requested": "PT",
+                                   "denial_reason": "not necessary",
+                                   "required_documents": [], "confidence": 0.9,
+                                   "evidence_refs": []}}},
+            {"type": "analysis_completed", "timestamp": "2026-04-16T10:00:03Z",
+             "payload": {"findings": {"missing_items": [], "conflicts": [],
+                                      "appeal_basis": None, "should_escalate": False,
+                                      "evidence_refs": []}}},
+        ]
+
+        lines = []
+        lines.append(json.dumps(valid_events[0]))
+        lines.append(json.dumps(valid_events[1]))
+        lines.append('{"type": "truncated_by_crash')  # corrupted mid-append
+        lines.append("")  # blank line (also malformed)
+        lines.append(json.dumps(valid_events[2]))
+        lines.append(json.dumps(valid_events[3]))
+
+        jsonl_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        result = replay_run(run_id)
+        assert result is not None
+        assert result.run_id == run_id
+        assert result.case_id == "case-001"
+        assert result.facts is not None
+        assert result.facts.payer == "Acme"
+        assert result.findings is not None
+        assert result.findings.should_escalate is False
+        # 4 valid events reconstructed (2 corrupted lines skipped)
+        assert len(result.events) == 4
