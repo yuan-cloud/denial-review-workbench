@@ -170,3 +170,55 @@ describe("getReplay", () => {
     );
   });
 });
+
+describe("error edge cases", () => {
+  it("propagates network failure when fetch throws", async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    let error: unknown;
+    try {
+      await getCases();
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(TypeError);
+    expect((error as TypeError).message).toBe("Failed to fetch");
+  });
+
+  it("handles non-JSON error response gracefully", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      json: () => Promise.reject(new SyntaxError("Unexpected token <")),
+    });
+
+    let error: unknown;
+    try {
+      await getCases();
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(ApiError);
+    const apiError = error as ApiError;
+    expect(apiError.status).toBe(502);
+    expect(apiError.detail).toBeNull();
+    expect(apiError.message).toBe("GET /cases failed: 502");
+  });
+
+  it("returns null detail when error body has no detail/error/message fields", async () => {
+    mockFetch.mockResolvedValueOnce(
+      errorResponse(500, { unexpected_field: "something" })
+    );
+
+    let error: unknown;
+    try {
+      await getRun("r1");
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(ApiError);
+    const apiError = error as ApiError;
+    expect(apiError.status).toBe(500);
+    expect(apiError.detail).toBeNull();
+  });
+});
