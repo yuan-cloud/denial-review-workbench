@@ -120,6 +120,26 @@ class TestPostRunsEndpoint:
         assert resp.status_code == 422  # Pydantic validation error
 
 
+class TestPostRunsPipelineFailure:
+    def test_pipeline_error_returns_422(self, client, monkeypatch):
+        """POST /runs returns 422 with detail when pipeline raises PipelineError."""
+        from app.errors import PipelineError
+
+        def failing_pipeline(case_id, facility_id):
+            raise PipelineError(
+                stage="extract_facts",
+                raw_response="",
+                cause=ValueError("model returned unparseable JSON"),
+            )
+
+        monkeypatch.setattr("app.main.run_pipeline", failing_pipeline)
+        resp = client.post("/runs", json={"case_id": "case-002"})
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "extract_facts" in detail
+        assert "unparseable JSON" in detail
+
+
 class TestApproveEndpoint:
     def _seed_approval_ready(self):
         state.seed("run-approve-test", {
@@ -192,6 +212,46 @@ class TestApproveEndpoint:
         client.post("/runs/run-approve-test/approve", json={})
         # Try again
         resp = client.post("/runs/run-approve-test/approve", json={})
+        assert resp.status_code == 409
+        assert "already approved" in resp.json()["detail"].lower()
+
+    def test_approve_jsonl_guard_catches_stale_memory(self, client, tmp_runs):
+        """JSONL guard returns 409 even when in-memory state says approval_requested.
+
+        Simulates a scenario where in-memory state was reset (e.g., by restart)
+        and re-seeded as approval_requested, but the JSONL log already contains
+        an approved event from a prior session.
+        """
+        run_id = "run-jsonl-guard-test"
+        # Seed in-memory state as approval_requested (stale after restart)
+        state.seed(run_id, {
+            "run_id": run_id,
+            "case_id": "case-001",
+            "facility_id": "fac-1",
+            "status": "approval_requested",
+            "documents": [],
+            "retrieved_policy_sections": [],
+            "facts": None,
+            "findings": {"missing_items": [], "conflicts": [], "appeal_basis": None,
+                         "should_escalate": False, "evidence_refs": []},
+            "recommendation": {
+                "action_type": "approve_or_proceed",
+                "rationale": "All clear",
+                "draft_text": "Original draft.",
+            },
+            "events": [],
+        })
+        # Write an approved event directly to JSONL (as if from a prior session)
+        append_event(run_id, "approved", {
+            "final_recommendation": {
+                "action_type": "approve_or_proceed",
+                "rationale": "All clear",
+                "draft_text": "Previously approved.",
+            },
+        })
+        # In-memory guard at line 161 passes (status != "approved"),
+        # but JSONL guard at line 163 should catch it.
+        resp = client.post(f"/runs/{run_id}/approve", json={})
         assert resp.status_code == 409
         assert "already approved" in resp.json()["detail"].lower()
 
