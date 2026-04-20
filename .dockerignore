@@ -1,0 +1,27 @@
+# Frontend (deployed separately as static SPA)
+frontend/
+docs/
+.beads/
+.github/
+.git/
+
+# Development files
+*.md
+!data/**/*.md
+backend/.env
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/providers/__pycache__/
+backend/tests/
+scripts/
+bench.sh
+demo.sh
+out/
+
+# OS/editor artifacts
+.DS_Store
+*.pyc
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
