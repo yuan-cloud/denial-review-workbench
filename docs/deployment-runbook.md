@@ -1,230 +1,291 @@
 # Deployment Runbook
 
-First hosted deployment topology for the Denial Review Workbench.
-Evaluates platform fit for the current architecture and provides a
-mechanical execution plan for the implementation beads.
+Hosted deployment topology for the Denial Review Workbench.
+Single-host plan on the existing Contabo VPS.
+
+> **Plan history (2026-04-22):** The original runbook recommended a
+> split topology (Vercel static SPA + Railway/Render container). That
+> plan was replaced with a single-host Contabo deployment after
+> evaluating operational simplicity, cost, and the fact that the VPS
+> already hosts the development environment. The Vercel-first guidance
+> and `vercel.json` have been removed.
 
 ---
 
-## Recommended First Topology
+## Topology
 
-**Frontend:** Static site on Vercel or Cloudflare Pages.
-**Backend:** Container on Railway, Render, or Fly.io with persistent volume.
+```
+Internet
+  │
+  ▼
+Cloudflare DNS (workbench.yuanliu.dev)
+  │
+  ▼
+Cloudflare Tunnel (cloudflared on Contabo)
+  │
+  ▼
+Caddy (reverse proxy + static file server)
+  ├─ /api/*  →  localhost:8000 (uvicorn)
+  └─ /*      →  frontend/dist/ (static SPA)
+  │
+  ▼
+Contabo VPS (single host)
+  ├─ uvicorn (systemd service, single worker)
+  ├─ data/runs/ (local filesystem, JSONL append)
+  └─ sops + age (encrypted secrets)
+```
 
-This split reflects the actual architecture: the frontend is a standard
-Vite/React SPA with no server-side rendering, while the backend requires
-a persistent writable filesystem and a long-lived single-worker process.
-
----
-
-## Why This Split
-
-### Frontend: static SPA
-
-The frontend builds to static assets via `bun run build` (`tsc -b && vite build`).
-It has zero server-side dependencies. The only runtime configuration is
-`VITE_API_BASE`, which is baked in at build time via Vite's env injection.
-
-Static hosting is the correct deployment shape because:
-- No SSR, no API routes, no edge functions needed.
-- Build output is a `dist/` directory of HTML, JS, and CSS.
-- Vercel, Cloudflare Pages, and Netlify all serve this natively.
-- CDN-edge delivery is free and fast.
-
-### Backend: persistent container
-
-The backend has three constraints that rule out serverless/edge deployment:
-
-1. **Writable filesystem.** The JSONL event store appends to
-   `data/runs/{run_id}.jsonl` on every pipeline stage and approval.
-   Serverless functions have read-only or ephemeral filesystems.
-
-2. **Single-worker requirement.** `state.py` stores run state in a
-   module-level Python dict that is not thread-safe and not shared
-   across workers. Multiple workers would produce inconsistent state.
-   `uvicorn` must run as a single worker.
-
-3. **Long-running requests.** A full pipeline run makes 3 sequential
-   Anthropic API calls and takes 10-15 seconds. Most serverless
-   platforms have request timeout limits (e.g., Vercel serverless
-   functions: 10s on Hobby tier, 60s on Pro).
-
-A container platform (Railway, Render, Fly.io) provides:
-- Persistent volume for `data/runs/` JSONL files.
-- Single long-lived process (no cold starts, no worker scaling).
-- Environment variable management for `ANTHROPIC_API_KEY`.
-- Health check endpoint: `GET /health` returns `{"status":"ok","phase":"3"}`.
+**Domain:** `workbench.yuanliu.dev`
+**Ingress:** Cloudflare Tunnel (no exposed ports on VPS)
+**Access control:** Cloudflare Access (protected preview)
+**TLS:** Cloudflare-managed (tunnel endpoint)
 
 ---
 
-## Why Not Full-Stack Vercel
+## Why Single Host
 
-Vercel's serverless model does not fit the current backend:
-- **No persistent filesystem.** JSONL writes would require migrating to
-  a database (Vercel KV, Postgres, etc.), which is a non-trivial
-  architecture change.
-- **Cold starts.** The lifespan hook seeds mock runs on startup. A cold
-  start on every request would re-seed state and lose in-memory run
-  data from prior requests.
-- **Timeout limits.** Pipeline runs exceed the free-tier 10s limit.
-- **Worker model.** Vercel functions are stateless and multi-instance.
-  The single-worker `state.py` assumption breaks.
+The backend's architectural constraints (writable JSONL filesystem,
+single-worker in-memory state, 10-15s pipeline requests) require a
+persistent long-lived process. The Contabo VPS already provides this
+for the development environment. Running the production deployment on
+the same host eliminates:
 
-Vercel is a good fit for the frontend (static SPA) but not for the
-backend without architectural changes that are out of scope for the
-first deployment.
+- Container platform costs (Railway/Render/Fly.io)
+- Split-host CORS coordination
+- Separate secret management per platform
+- Network latency between frontend and backend
+
+The frontend is a static SPA that Caddy serves directly from the build
+output directory. No separate hosting platform is needed.
 
 ---
 
-## Preview vs. Production Shape
+## Components
 
-### Preview (first deployment target)
+### Backend: systemd + uvicorn
 
-- Frontend: Vercel preview deployment (auto-deploy from `main`).
-- Backend: Railway or Render free/starter tier, single container.
-- Domain: Platform-provided subdomain (e.g., `denial-review.up.railway.app`).
-- CORS: `FRONTEND_URL` set to the Vercel preview URL.
-- Storage: Persistent volume mounted at the container's `data/runs/` path.
-- Protection: Vercel deployment protection enabled (password or
-  Vercel Authentication). Backend behind platform auth or IP allowlist.
-- Data: Synthetic case data only. No real patient data.
+```ini
+# /etc/systemd/system/denial-review-workbench.service
+[Unit]
+Description=Denial Review Backend
+After=network.target
 
-### Production (deferred)
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/data/projects/denial-review-workbench/backend
+EnvironmentFile=/data/projects/denial-review-workbench/backend/.env
+ExecStart=/usr/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
 
-- Custom domain with TLS.
-- Backend on a dedicated VPS or managed container with guaranteed uptime.
-- Persistent storage backed by real volume (not ephemeral).
-- Monitoring and alerting (health check polling, error rate tracking).
-- Log aggregation (stdout/stderr from uvicorn → external service).
-- Secret rotation schedule for `ANTHROPIC_API_KEY`.
+[Install]
+WantedBy=multi-user.target
+```
 
-Production deployment is out of scope for the first hosted deployment.
+Key settings:
+- `--host 127.0.0.1`: bind to localhost only. Caddy proxies external traffic.
+- No `--workers` flag: single-worker constraint is architectural.
+- No `--reload` flag: production mode.
+- `EnvironmentFile`: loads `ANTHROPIC_API_KEY` from `.env` (written by Ansible `secrets` role).
+- `Restart=on-failure`: auto-restart on crash, 5s backoff.
+
+### Frontend: Caddy static serving
+
+Build the frontend and let Caddy serve the output:
+
+```bash
+cd frontend && bun install && bun run build
+```
+
+Caddy serves `frontend/dist/` for all non-API paths. SPA fallback
+(try_files) ensures client-side routing works if ever added.
+
+### Caddy: reverse proxy + static
+
+```
+workbench.yuanliu.dev {
+    handle /api/* {
+        reverse_proxy localhost:8000
+    }
+    handle {
+        root * /data/projects/denial-review-workbench/frontend/dist
+        try_files {path} /index.html
+        file_server
+    }
+}
+```
+
+Note: the backend routes do not currently use an `/api/` prefix. The
+Caddy config above assumes either:
+1. Adding a `root_path="/api"` to the FastAPI app, or
+2. Using `handle_path /api/*` with `strip_prefix` to remove `/api/`
+   before proxying to uvicorn.
+
+The simpler alternative is proxying specific backend paths:
+
+```
+workbench.yuanliu.dev {
+    handle /health {
+        reverse_proxy localhost:8000
+    }
+    handle /cases {
+        reverse_proxy localhost:8000
+    }
+    handle /runs/* {
+        reverse_proxy localhost:8000
+    }
+    handle /demo-fallback/* {
+        reverse_proxy localhost:8000
+    }
+    handle {
+        root * /data/projects/denial-review-workbench/frontend/dist
+        try_files {path} /index.html
+        file_server
+    }
+}
+```
+
+This avoids any backend code changes. Choose one approach during
+implementation.
+
+### Cloudflare Tunnel
+
+`cloudflared` runs as a systemd service on the VPS and connects to
+Cloudflare's edge. No ports are exposed on the VPS firewall. All
+external traffic arrives through the tunnel.
+
+### Cloudflare Access
+
+Cloudflare Access gates `workbench.yuanliu.dev` behind an
+authentication policy (email allowlist or one-time PIN). This replaces
+the Vercel Deployment Protection model. The protection applies to both
+frontend and API routes since all traffic flows through the tunnel.
 
 ---
 
 ## Environment Variables
 
-### Backend container
+### Backend (.env on VPS)
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `ANTHROPIC_API_KEY` | Yes | Anthropic API key for live pipeline |
-| `FRONTEND_URL` | Yes | CORS allowed origin (the frontend URL) |
-| `PORT` | Platform-specific | Some platforms (Railway, Render) set this automatically |
+| `FRONTEND_URL` | Yes | `https://workbench.yuanliu.dev` (CORS origin) |
 
-The backend reads `FRONTEND_URL` for CORS (`main.py:26`). If this does
-not match the actual frontend URL, every browser API call fails silently.
+The backend reads `FRONTEND_URL` for CORS (`main.py:26`). This must
+match the Cloudflare domain exactly.
 
-### Frontend build
+### Frontend (build-time)
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `VITE_API_BASE` | Yes | Backend URL (baked in at build time) |
 
-Set this in the Vercel/Cloudflare build environment. It is not a runtime
-variable; Vite replaces `import.meta.env.VITE_API_BASE` during the build.
+For the single-host deployment, set this to the same domain as the
+frontend (e.g., `https://workbench.yuanliu.dev`). The Caddy config
+routes API requests to the backend.
+
+---
+
+## Secrets Management
+
+### sops + age (via Ansible)
+
+Secrets are encrypted at rest in `infra/group_vars/all.sops.yml` using
+sops with age keys. The Ansible `secrets` role templates `backend/.env`
+from the decrypted vault variables at deploy time.
+
+**Bootstrap:** Run `infra/scripts/sops-setup.sh` once to generate the
+age keypair and configure `infra/.sops.yaml` with the public key.
+
+**Edit secrets:**
+```bash
+sops infra/group_vars/all.sops.yml
+```
+
+SOPS opens `$EDITOR`. Replace placeholder values with real secrets.
+The file is encrypted on save. The committed version contains only
+ciphertext.
+
+**Deploy secrets:** `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml --tags secrets`
+writes `backend/.env` (mode 0600) from the `backend.env.j2` template.
+
+The plaintext `backend/.env` must never be committed. The encrypted
+`infra/group_vars/all.sops.yml` is safe to commit.
+
+### Rotation
+
+Rotate `ANTHROPIC_API_KEY` if:
+- The key appears in any log, screenshot, or deployment artifact.
+- The `.env` file is accidentally committed.
+- The VPS is compromised.
+
+After rotation: edit secrets via `sops infra/group_vars/all.sops.yml`,
+then re-deploy: `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml --tags secrets`. The handler
+restarts the backend service automatically.
+
+---
+
+## Backups
+
+### Cloudflare R2
+
+JSONL run logs (`data/runs/`) are the critical persistent data.
+Encrypted backups to Cloudflare R2:
+
+```bash
+tar czf - data/runs/ | age -r $(cat ~/.config/sops/age/keys.txt | grep "public key" | cut -d: -f2 | tr -d ' ') \
+    > /tmp/runs-backup-$(date +%Y%m%d).tar.gz.age
+
+# Upload to R2
+aws s3 cp /tmp/runs-backup-*.tar.gz.age s3://denial-review-backups/ \
+    --endpoint-url https://<account-id>.r2.cloudflarestorage.com
+```
+
+Schedule as a cron job. Retain at least 7 daily backups.
 
 ---
 
 ## Health Check
 
-The backend exposes `GET /health` returning `{"status":"ok","phase":"3"}`.
-Configure the container platform to poll this endpoint. Recommended
-interval: 30 seconds. Failure threshold: 3 consecutive failures.
-
----
-
-## Persistent Storage
-
-The JSONL event store writes to `data/runs/`. This directory must
-survive container restarts.
-
-**Railway:** Use a persistent volume mounted at the container's
-`data/runs/` path.
-
-**Render:** Use a persistent disk attached to the service.
-
-**Fly.io:** Use a Fly Volume mounted at the data directory.
-
-If the volume is lost, all run history is lost. Replay and evidence
-export depend on these files existing. Mock runs (`mock_run.json`) are
-in the git repo and survive redeployment, but live run JSONL files do not.
-
----
-
-## Security Considerations
-
-### Vercel (frontend)
-
-- Enable Deployment Protection on preview deployments to prevent
-  accidental public access before the project is ready.
-- `VITE_API_BASE` is baked into the JS bundle and visible to anyone
-  who inspects the deployed frontend. This is expected; the backend
-  URL is not a secret.
-- Do not put `ANTHROPIC_API_KEY` in the Vercel build environment.
-  The frontend never needs it.
-
-### Backend container
-
-- `ANTHROPIC_API_KEY` must be set as a secret/encrypted environment
-  variable on the container platform, not in a committed file.
-- The backend currently has no authentication. Anyone who can reach
-  the backend URL can run pipelines and approve runs. For preview
-  deployment, rely on platform-level access controls (IP allowlist,
-  platform auth). Adding application-level auth is a production
-  concern, not a preview requirement.
-- The `data/` directory contains synthetic case data. No real PHI.
-  The security grep in CI verifies this on every push.
-
-### Cloudflare Pages (alternative frontend)
-
-- Cloudflare Pages Direct Upload avoids connecting a Git repo to
-  Cloudflare, which reduces the blast radius if the Cloudflare
-  account is compromised. The tradeoff is manual deploy steps
-  instead of auto-deploy on push.
-- For preview deployments, auto-deploy from Git (Vercel) is simpler.
-
----
-
-## Container Start Command
-
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+curl https://workbench.yuanliu.dev/health
+# Expected: {"status":"ok","phase":"3"}
 ```
 
-Do not use `--reload` in deployed environments. Do not add `--workers`.
-The single-worker constraint is architectural, not a deployment choice.
+For systemd-level monitoring, add a health check timer:
+
+```bash
+# Check every 60 seconds
+systemctl status denial-review-workbench
+curl -sf http://localhost:8000/health || systemctl restart denial-review-workbench
+```
 
 ---
 
-## Execution Plan for Implementation Beads
+## Deployment Steps
 
-### bd-3mj.7.1 (backend container)
+### First deployment
 
-1. Add `Dockerfile` to repo root:
-   - Base: `python:3.13-slim`
-   - Install dependencies from `requirements.txt`
-   - Copy `backend/` and `data/` into the image
-   - CMD: `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}`
-   - Expose port 8000
-2. Add `railway.toml` or `render.yaml` for the chosen platform.
-3. Configure persistent volume for `data/runs/`.
-4. Set environment variables: `ANTHROPIC_API_KEY`, `FRONTEND_URL`.
-5. Verify: `curl https://<backend-url>/health`
+1. Bootstrap secrets: `cd infra && ./scripts/sops-setup.sh`
+2. Edit secrets: `sops infra/group_vars/all.sops.yml`
+3. Run Ansible: `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml`
+4. Build frontend: `cd frontend && bun install && VITE_API_BASE=https://workbench.yuanliu.dev bun run build`
+5. Configure Caddy with the Caddyfile above.
+6. Install and configure `cloudflared` tunnel.
+7. Configure Cloudflare Access policy for `workbench.yuanliu.dev`.
+8. Start backend: `systemctl start denial-review-workbench`
+9. Verify: `curl http://localhost:8000/health`
+10. Verify: `curl https://workbench.yuanliu.dev/health`
 
-### bd-3mj.7.2 (frontend hosting)
+### Redeployment (after code changes)
 
-1. Connect the GitHub repo to Vercel.
-2. Set build command: `cd frontend && bun install && bun run build`
-3. Set output directory: `frontend/dist`
-4. Set environment variable: `VITE_API_BASE=https://<backend-url>`
-5. Enable Deployment Protection on preview deployments.
-6. Verify: visit the Vercel URL, confirm case list loads.
-
-### bd-3mj.7.3 (security checklist)
-
-1. Verify `ANTHROPIC_API_KEY` is set as encrypted secret, not plaintext.
-2. Verify `FRONTEND_URL` matches the actual Vercel preview URL.
-3. Verify Deployment Protection is enabled on Vercel.
-4. Verify backend is not publicly accessible without platform auth.
-5. Run security grep against deployed data directory.
+```bash
+cd /data/projects/denial-review-workbench
+git pull --ff-only
+cd frontend && bun install && VITE_API_BASE=https://workbench.yuanliu.dev bun run build
+cd ..
+systemctl restart denial-review-workbench
+curl -sf http://localhost:8000/health && echo "OK" || echo "FAIL"
+```

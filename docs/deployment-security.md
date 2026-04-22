@@ -1,8 +1,13 @@
 # Deployment Security
 
-Security setup for the first hosted deployment. Proportionate to a
-prototype with synthetic data, but structured to avoid obvious
-platform-risk mistakes.
+Security setup for the Contabo single-host deployment. Proportionate
+to a prototype with synthetic data, but structured to avoid obvious
+operational mistakes.
+
+> **Plan history (2026-04-22):** The original security doc covered a
+> Vercel + Railway/Render split. The deployment plan has been pivoted
+> to a single Contabo VPS with Cloudflare Tunnel + Access. This
+> document reflects the current plan.
 
 ---
 
@@ -10,122 +15,96 @@ platform-risk mistakes.
 
 ### ANTHROPIC_API_KEY
 
-- Store as an encrypted environment variable on the backend container
-  platform (Railway, Render, or Fly.io).
-- Never commit to the repository. `backend/.env` is in `.gitignore`.
-- Never set in the Vercel/Cloudflare frontend build environment.
-  The frontend has no use for it.
-- Rotation: rotate if the key is ever exposed in logs, screenshots,
-  or deployment artifacts. No scheduled rotation needed for a
-  prototype, but treat any exposure as a rotation trigger.
+- Encrypted at rest in `infra/group_vars/all.sops.yml` (sops + age).
+- Ansible `secrets` role templates `backend/.env` (mode 0600) at
+  deploy time. The plaintext `.env` is never committed.
+- Loaded by systemd's `EnvironmentFile` directive at service start.
+- Rotation trigger: any exposure in logs, screenshots, artifacts, or
+  if the VPS is compromised.
 
 ### FRONTEND_URL
 
-- Not a secret. It is the public URL of the frontend deployment.
-- Set on the backend container to configure CORS.
-- If this value does not match the actual frontend origin, all
-  browser API calls fail silently with CORS errors.
+- Not a secret. Set to `https://workbench.yuanliu.dev` in the backend
+  `.env` for CORS configuration.
+- If this does not match the actual domain, all browser API calls fail
+  silently with CORS errors.
 
 ### VITE_API_BASE
 
-- Not a secret. It is the public URL of the backend.
-- Baked into the frontend JS bundle at build time. Visible to anyone
-  who inspects the deployed code. This is expected and unavoidable
-  for a client-side SPA.
+- Not a secret. Baked into the frontend JS bundle at build time.
+- For single-host deployment, set to the same domain as the frontend
+  (`https://workbench.yuanliu.dev`).
 
 ---
 
-## Vercel (Frontend)
+## Ingress: Cloudflare Tunnel
 
-### Deployment Protection
+- No ports are exposed on the VPS firewall. All external traffic
+  arrives through the Cloudflare Tunnel (`cloudflared`).
+- The tunnel terminates TLS at Cloudflare's edge. The connection
+  between Cloudflare and the VPS is encrypted by the tunnel protocol.
+- `cloudflared` runs as a systemd service with auto-restart.
 
-- Enable Deployment Protection for all preview deployments.
-  Options: Vercel Authentication (team-only) or Standard Protection
-  (password). Either prevents accidental public access.
-- Production deployments: enable protection until the project is
-  explicitly ready for public access.
+### Cloudflare Access
 
-### Project Settings Review
-
-Before the first deployment:
-- [ ] Verify the project is not set to "Public" in Project Settings.
-- [ ] Verify Deployment Protection is enabled.
-- [ ] Verify no sensitive environment variables are set (the frontend
-      needs only `VITE_API_BASE`).
-- [ ] Verify the connected Git repo branch is `main` (not a personal
-      fork or experimental branch).
-
-### Build Output
-
-Vite builds to `frontend/dist/`. The output is static HTML, JS, and
-CSS. No server-side code runs on Vercel. The Vercel project should be
-configured as a static site (Framework Preset: Vite), not a Node.js
-serverless function.
+- `workbench.yuanliu.dev` is gated behind a Cloudflare Access policy.
+- Access control options: email allowlist, one-time PIN, or
+  Cloudflare service tokens for automated access.
+- The policy applies to all routes (frontend and API) since all
+  traffic flows through the tunnel.
+- This replaces the Vercel Deployment Protection model from the
+  earlier plan.
 
 ---
 
-## Backend Container Platform
+## VPS Security
 
-### Access Control
+### Filesystem
 
-The backend has no application-level authentication. For preview
-deployment, access control must come from the platform:
+- `backend/.env` (plaintext): readable only by the service user.
+  `chmod 600 backend/.env`.
+- `infra/group_vars/all.sops.yml` (sops-encrypted): committed to repo.
+- `data/runs/`: writable by the service user. Contains synthetic run
+  logs only. No real PHI.
 
-- **Railway:** Use a private networking configuration or restrict
-  the service to internal access only, then expose via a proxy with
-  basic auth.
-- **Render:** Private services are available on paid plans. On free
-  tier, the backend URL is publicly accessible. Mitigate by treating
-  the preview URL as semi-public (acceptable for synthetic data).
-- **Fly.io:** Use `fly wireguard` for private access, or accept that
-  the public URL is reachable.
+### Process isolation
 
-For a prototype with synthetic-only data, a publicly accessible
-backend is acceptable. The risk is API cost (someone could call
-POST /runs repeatedly and burn Anthropic credits), not data exposure.
+- The backend runs as user `ubuntu` under systemd, not as root.
+- `uvicorn` binds to `127.0.0.1:8000` (localhost only). External
+  access is through Caddy + Cloudflare Tunnel.
 
-### Environment Variable Security
+### No application-level auth
 
-- Set `ANTHROPIC_API_KEY` as a secret/encrypted variable, not a
-  plaintext environment variable.
-- Set `FRONTEND_URL` to the exact Vercel deployment URL (including
-  protocol and no trailing slash). CORS mismatch is the most common
-  deployment failure.
-- Do not set `DEBUG=true` or enable debug/reload modes in production.
-
-### Logs
-
-Container platforms capture stdout/stderr from uvicorn. Review:
-- No `ANTHROPIC_API_KEY` value appears in startup logs.
-- No patient data appears in logs (synthetic data only, but verify).
-- Pipeline errors log the stage name and error type, not raw API
-  responses that might contain model output.
+The backend has no authentication. Access control comes from
+Cloudflare Access. For this prototype with synthetic data, this is
+acceptable. Anyone who bypasses Cloudflare Access (e.g., direct VPS
+access) can run pipelines and approve runs.
 
 ---
 
 ## Preflight Checklist
 
-Run before every preview or production deployment.
+Run before every deployment or redeployment.
 
 ### Secrets
 
-- [ ] `ANTHROPIC_API_KEY` is set as encrypted secret on backend platform.
-- [ ] `ANTHROPIC_API_KEY` is NOT set anywhere on Vercel.
+- [ ] `backend/.env` exists and contains `ANTHROPIC_API_KEY`.
 - [ ] `backend/.env` is NOT committed to the repository.
+- [ ] `infra/group_vars/all.sops.yml` is up to date (edit via `sops` after rotation).
 - [ ] `grep -r "sk-ant" .` returns empty (no hardcoded keys).
+- [ ] `chmod 600 backend/.env` (readable only by service user).
 
 ### CORS
 
-- [ ] `FRONTEND_URL` on the backend matches the actual Vercel URL.
-- [ ] `VITE_API_BASE` in the Vercel build env matches the actual
-      backend URL.
-- [ ] Both values use the same protocol (both `https://` for hosted).
+- [ ] `FRONTEND_URL` in `.env` matches `https://workbench.yuanliu.dev`.
+- [ ] `VITE_API_BASE` was set correctly when the frontend was last built.
+- [ ] Both values use `https://` (not `http://`).
 
-### Protection
+### Access Control
 
-- [ ] Vercel Deployment Protection is enabled.
-- [ ] Backend platform access is restricted or risk is accepted
-      (synthetic data only, API cost is the exposure).
+- [ ] Cloudflare Access policy is active for `workbench.yuanliu.dev`.
+- [ ] `cloudflared` service is running (`systemctl status cloudflared`).
+- [ ] No ports other than SSH are exposed on the VPS firewall.
 
 ### Data
 
@@ -139,26 +118,31 @@ Run before every preview or production deployment.
 - [ ] No real patient data in any case packet.
 - [ ] `data/runs/` contains only synthetic run logs.
 
-### Logs and Activity
+### Health
 
-- [ ] Review recent deployment logs for leaked secrets.
-- [ ] Review recent Vercel deployment list for unexpected deployments.
-- [ ] Confirm health check returns `{"status":"ok","phase":"3"}`.
+- [ ] `curl http://localhost:8000/health` returns `{"status":"ok","phase":"3"}`.
+- [ ] `curl https://workbench.yuanliu.dev/health` returns the same (through tunnel).
+- [ ] systemd service is active: `systemctl is-active denial-review-workbench`.
 
 ---
 
 ## Incident Response (Prototype Scale)
 
-If the API key is exposed:
-1. Rotate the key immediately on the Anthropic dashboard.
-2. Update the encrypted secret on the backend platform.
-3. Restart the backend container.
+**API key exposed:**
+1. Rotate the key on the Anthropic dashboard.
+2. Edit secrets: `sops infra/group_vars/all.sops.yml`
+3. Re-deploy: `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml --tags secrets` (restarts service automatically)
 4. Review Anthropic usage logs for unauthorized calls.
 
-If the backend URL is abused (excessive pipeline calls):
-1. Check Anthropic usage dashboard for unexpected charges.
-2. Restrict backend access (platform firewall, IP allowlist, or
-   take the service offline).
-3. Consider adding a rate limiter (production concern, not preview).
+**VPS compromised:**
+1. Rotate `ANTHROPIC_API_KEY` immediately.
+2. Rotate the `age` key and re-encrypt all secrets.
+3. Review `cloudflared` tunnel credentials.
+4. Review Cloudflare Access audit logs.
+
+**Excessive pipeline calls:**
+1. Check Anthropic usage dashboard.
+2. Tighten Cloudflare Access policy (restrict to specific emails).
+3. Consider adding rate limiting at the Caddy layer.
 
 There is no PII exposure risk. All case data is synthetic.
