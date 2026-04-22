@@ -1,0 +1,11 @@
+# Encrypted secrets — edit with: sops infra/group_vars/all.sops.yml
+#
+# This is a PLACEHOLDER. After running scripts/sops-setup.sh, replace
+# this file by running:
+#   sops infra/group_vars/all.sops.yml
+#
+# SOPS will encrypt on save. The committed version contains only ciphertext.
+#
+# Expected keys (set real values via sops):
+vault_anthropic_api_key: PLACEHOLDER_RUN_SOPS_SETUP
+vault_cloudflare_tunnel_token: PLACEHOLDER_SET_TUNNEL_TOKEN

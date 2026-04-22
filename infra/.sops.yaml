@@ -1,0 +1,8 @@
+# SOPS configuration for denial-review-workbench.
+# Encrypts YAML files matching the pattern below using age.
+#
+# After running scripts/sops-setup.sh, replace the age public key below
+# with the real key from the generated keypair.
+creation_rules:
+  - path_regex: \.sops\.yml$
+    age: "age1REPLACE_WITH_REAL_PUBLIC_KEY_FROM_SETUP"

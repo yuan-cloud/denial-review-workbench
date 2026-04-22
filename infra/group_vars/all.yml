@@ -1,0 +1,20 @@
+# Shared plaintext variables.
+# Secrets go in all.sops.yml (encrypted).
+
+# Python
+python_version: "3.13"
+pip_packages:
+  - fastapi
+  - uvicorn
+  - anthropic
+  - pydantic
+
+# Bun (frontend build)
+bun_version: "1.2"
+
+# Systemd service name — matches docs/deployment-runbook.md
+backend_service: denial-review-workbench
+
+# Health check
+health_url: "http://127.0.0.1:{{ backend_port | default(8000) }}/health"
+health_expected: '{"status":"ok","phase":"3"}'

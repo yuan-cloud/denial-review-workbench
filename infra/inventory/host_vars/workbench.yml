@@ -1,0 +1,19 @@
+# Host-specific variables for the Contabo VPS.
+# Secrets are in group_vars/all.sops.yml, not here.
+
+# App identity
+app_domain: workbench.yuanliu.dev
+app_name: denial-review-workbench
+
+# Paths on the host
+app_root: /data/projects/denial-review-workbench
+backend_dir: "{{ app_root }}/backend"
+data_dir: "{{ app_root }}/data"
+frontend_dist: "{{ app_root }}/frontend/dist"
+
+# Backend runtime
+backend_port: 8000
+backend_workers: 1  # architectural constraint — state.py is not thread-safe
+
+# Frontend
+frontend_port: 5274  # only used for local dev; Caddy serves static in prod

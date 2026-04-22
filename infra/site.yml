@@ -1,0 +1,27 @@
+# Main playbook — single-host deployment for Denial Review Workbench.
+#
+# Usage:
+#   ansible-playbook -i infra/inventory/hosts.yml infra/site.yml
+#   ansible-playbook -i infra/inventory/hosts.yml infra/site.yml --tags secrets
+#
+# Later beads will add roles for:
+#   - caddy (reverse proxy + static frontend serving)
+#   - backend (systemd unit + uvicorn)
+#   - tunnel (Cloudflare Tunnel + Access)
+#   - backup (Cloudflare R2 encrypted JSONL backup)
+---
+- name: Deploy Denial Review Workbench
+  hosts: workbench
+  become: true
+
+  pre_tasks:
+    - name: Load encrypted secrets
+      community.sops.load_vars:
+        file: "{{ playbook_dir }}/group_vars/all.sops.yml"
+      tags: [always]
+
+  roles:
+    - role: common
+      tags: [common]
+    - role: secrets
+      tags: [secrets]
