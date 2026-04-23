@@ -67,7 +67,7 @@ Type=simple
 User=ubuntu
 WorkingDirectory=/data/projects/denial-review-workbench/backend
 EnvironmentFile=/data/projects/denial-review-workbench/backend/.env
-ExecStart=/usr/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+ExecStart=/data/projects/denial-review-workbench/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5
 
@@ -185,14 +185,16 @@ curl https://workbench.yuanliu.dev/health
 
 ### First deployment
 
-1. Bootstrap secrets: `cd infra && ./scripts/sops-setup.sh`
-2. Edit secrets: `sops infra/group_vars/all.sops.yml`
-3. Add DNS A record for `workbench` in Vercel DNS.
-4. Run Ansible: `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml`
-5. Build frontend: `cd frontend && bun install && VITE_API_BASE=https://workbench.yuanliu.dev bun run build`
-6. Install Caddy Caddyfile (see above).
-7. Start services: `systemctl start caddy denial-review-workbench`
-8. Verify: `curl https://workbench.yuanliu.dev/health`
+1. Bootstrap secrets on the VPS: `./infra/scripts/sops-setup.sh`
+2. Edit secrets interactively: `sops infra/group_vars/all.sops.yml`
+3. Add the Vercel DNS A record for `workbench`.
+4. Run the full deploy playbook: `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml`
+5. Verify public health: `curl https://workbench.yuanliu.dev/health`
+
+The full playbook is the forward-deploy path. It renders secrets,
+installs backend dependencies, writes the systemd unit, builds the
+frontend static assets, deploys the Caddy config, and ensures both
+services are running.
 
 ### Redeployment
 

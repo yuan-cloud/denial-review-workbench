@@ -1,8 +1,8 @@
 # infra/ — Ansible + SOPS/age scaffold
 
 Single-host deployment scaffold for the Denial Review Workbench on the
-Contabo VPS. Later beads add Caddy, systemd, and backup roles on top
-of this foundation.
+Contabo VPS. Caddy and systemd roles are already part of this
+foundation; backup work remains later.
 
 ## Layout
 
@@ -69,12 +69,14 @@ separately via their own package manager; this script is not for macOS.
 
 ## Fresh Linux control host or VPS bootstrap
 
-A fresh Linux control host or VPS needs:
-1. Run `./infra/scripts/sops-setup.sh` — installs `age`/`sops` if missing,
-   generates the age keypair, and updates `.sops.yaml`.
-2. The age private key transferred securely from an existing operator
-   (never over plaintext channels). Path: `~/.config/sops/age/keys.txt`.
-3. Ansible 2.15+ with `community.sops` collection:
+For the current same-host deploy model on the Contabo VPS:
+1. Run `./infra/scripts/sops-setup.sh` on the VPS — it installs `age`/`sops`
+   if missing, generates the local age keypair, and updates `.sops.yaml`.
+2. Confirm the private key exists locally at
+   `~/.config/sops/age/keys.txt` and is not transferred from another
+   operator machine.
+3. Install Ansible 2.15+ with `community.sops` on the VPS:
    `ansible-galaxy collection install community.sops`
-4. Set `ansible_host` in `inventory/hosts.yml` to the VPS public IP
-   (this is plaintext because Ansible needs it before SOPS decryption).
+4. Run `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml`
+   directly on the VPS. `inventory/hosts.yml` is locked to
+   `ansible_connection: local`, so no `ansible_host` setting is needed.
