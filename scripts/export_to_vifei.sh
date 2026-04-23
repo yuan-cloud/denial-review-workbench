@@ -15,6 +15,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 DATA_DIR="$REPO_ROOT/data"
+RUNS_DIR="${RUNS_DIR:-$DATA_DIR/runs}"
 OUT_DIR="$REPO_ROOT/out"
 SOURCE_ID="denial-review-workbench"
 
@@ -27,7 +28,7 @@ if [ $# -lt 1 ] || [ -z "$1" ]; then
 fi
 
 RUN_ID="$1"
-RUN_FILE="$DATA_DIR/runs/$RUN_ID.jsonl"
+RUN_FILE="$RUNS_DIR/$RUN_ID.jsonl"
 
 if [ ! -f "$RUN_FILE" ]; then
     printf 'Error: run file not found: %s\n' "$RUN_FILE" >&2

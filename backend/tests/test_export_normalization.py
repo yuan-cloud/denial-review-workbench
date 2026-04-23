@@ -1,9 +1,10 @@
 """
 Tests for scripts/export_to_vifei.sh normalization logic.
 
-Uses real JSONL fixtures from data/runs/ — no fabricated data, no mocked I/O.
-The normalization Python block is invoked via subprocess. Error-path tests
-call the full shell script.
+Uses frozen synthetic-case JSONL fixtures copied from data/runs/ for
+case-001, case-002, and case-003 only. The normalization Python block is
+invoked via subprocess. Error-path tests call the full shell script against
+the same frozen fixtures.
 
 Bead: bd-7io
 """
@@ -19,28 +20,14 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "export_to_vifei.sh"
-DATA_DIR = REPO_ROOT / "data"
-RUNS_DIR = DATA_DIR / "runs"
+RUNS_DIR = REPO_ROOT / "backend" / "tests" / "fixtures" / "export_runs"
 
-# Fixtures — real files from the repo
+# Fixtures — frozen synthetic-case files copied from data/runs/
 APPROVED_RUN = "run-case-002-20260416075553"
 ESCALATED_LEGACY_RUN = "run-case-003-20260416085208"
 MOCK_RUN = "run-case-002-mock"
 PARTIAL_RUN = "run-case-001-20260415104157"
-
-# Find a pending-approval run dynamically
-PENDING_RUN = None
-for f in sorted(RUNS_DIR.iterdir()):
-    if not f.name.endswith(".jsonl") or "mock" in f.name:
-        continue
-    with open(f) as fh:
-        lines = [l.strip() for l in fh if l.strip()]
-    if not lines:
-        continue
-    events = [json.loads(l) for l in lines]
-    if events[0].get("type") == "run_started" and events[-1].get("type") == "approval_requested":
-        PENDING_RUN = f.stem
-        break
+PENDING_RUN = "run-case-001-20260415111641"
 
 # Vifei CommittedEvent canonical field order (from event.rs doc comment)
 CANONICAL_FIELDS = [
@@ -177,10 +164,13 @@ def normalize(run_id: str, out_path: str) -> list[dict]:
 
 def run_shell_script(args: list[str]) -> subprocess.CompletedProcess:
     """Run the full shell script for error-path testing."""
+    env = os.environ.copy()
+    env["RUNS_DIR"] = str(RUNS_DIR)
     return subprocess.run(
         ["sh", str(SCRIPT)] + args,
         capture_output=True, text=True,
         cwd=str(REPO_ROOT),
+        env=env,
     )
 
 
@@ -319,7 +309,6 @@ class TestRejection:
         combined = (result.stderr + result.stdout).lower()
         assert "partial run" in combined
 
-    @pytest.mark.skipif(PENDING_RUN is None, reason="No pending-approval run found")
     def test_pending_approval_rejected(self):
         """Pending approval runs must be rejected."""
         result = run_shell_script([PENDING_RUN])
