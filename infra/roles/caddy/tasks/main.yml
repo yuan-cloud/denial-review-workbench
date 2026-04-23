@@ -2,14 +2,15 @@
 ---
 - name: Install Caddy via official apt repo
   block:
-    - name: Add Caddy GPG key
-      ansible.builtin.apt_key:
+    - name: Download Caddy GPG key
+      ansible.builtin.get_url:
         url: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
-        state: present
+        dest: /usr/share/keyrings/caddy-stable-archive-keyring.asc
+        mode: "0644"
 
-    - name: Add Caddy apt repo
+    - name: Add Caddy apt repo (signed-by)
       ansible.builtin.apt_repository:
-        repo: "deb https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main"
+        repo: "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.asc] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main"
         state: present
         filename: caddy-stable
 
