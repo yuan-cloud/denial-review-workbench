@@ -1,8 +1,8 @@
 # infra/ — Ansible + SOPS/age scaffold
 
 Single-host deployment scaffold for the Denial Review Workbench on the
-Contabo VPS. Later beads add Caddy, systemd, Cloudflare Tunnel, and
-backup roles on top of this foundation.
+Contabo VPS. Later beads add Caddy, systemd, and backup roles on top
+of this foundation.
 
 ## Layout
 

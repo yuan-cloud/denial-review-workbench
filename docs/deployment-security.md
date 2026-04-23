@@ -4,10 +4,10 @@ Security setup for the Contabo single-host deployment. Proportionate
 to a prototype with synthetic data, but structured to avoid obvious
 operational mistakes.
 
-> **Plan history (2026-04-22):** The original security doc covered a
-> Vercel + Railway/Render split. The deployment plan has been pivoted
-> to a single Contabo VPS with Cloudflare Tunnel + Access. This
-> document reflects the current plan.
+> **Plan history (2026-04-22):** Earlier drafts covered Vercel split
+> and Cloudflare Tunnel + Access plans. The launch path is now simpler:
+> Caddy with Let's Encrypt on the Contabo VPS, no Cloudflare proxy
+> layer. This document reflects the current plan.
 
 ---
 
@@ -32,28 +32,34 @@ operational mistakes.
 ### VITE_API_BASE
 
 - Not a secret. Baked into the frontend JS bundle at build time.
-- For single-host deployment, set to the same domain as the frontend
-  (`https://workbench.yuanliu.dev`).
+- Set to `https://workbench.yuanliu.dev` for the single-host deploy.
 
 ---
 
-## Ingress: Cloudflare Tunnel
+## Network Security
 
-- No ports are exposed on the VPS firewall. All external traffic
-  arrives through the Cloudflare Tunnel (`cloudflared`).
-- The tunnel terminates TLS at Cloudflare's edge. The connection
-  between Cloudflare and the VPS is encrypted by the tunnel protocol.
-- `cloudflared` runs as a systemd service with auto-restart.
+### TLS
 
-### Cloudflare Access
+Caddy obtains and renews Let's Encrypt certificates automatically.
+All external traffic is HTTPS. Caddy listens on ports 80 (redirect)
+and 443 (TLS).
 
-- `workbench.yuanliu.dev` is gated behind a Cloudflare Access policy.
-- Access control options: email allowlist, one-time PIN, or
-  Cloudflare service tokens for automated access.
-- The policy applies to all routes (frontend and API) since all
-  traffic flows through the tunnel.
-- This replaces the Vercel Deployment Protection model from the
-  earlier plan.
+### Firewall
+
+Open ports on the VPS:
+- **22** (SSH)
+- **80** (Caddy, HTTP → HTTPS redirect)
+- **443** (Caddy, HTTPS)
+
+uvicorn binds to `127.0.0.1:8000` (localhost only). It is not directly
+accessible from the internet.
+
+### No application-level auth
+
+The backend has no authentication. Anyone who can reach
+`workbench.yuanliu.dev` can use the workbench. For a prototype with
+synthetic data, this is acceptable. The risk is API cost (Anthropic
+credits from pipeline calls), not data exposure.
 
 ---
 
@@ -61,50 +67,38 @@ operational mistakes.
 
 ### Filesystem
 
-- `backend/.env` (plaintext): readable only by the service user.
-  `chmod 600 backend/.env`.
+- `backend/.env` (plaintext): mode 0600, readable only by `ubuntu`.
 - `infra/group_vars/all.sops.yml` (sops-encrypted): committed to repo.
-- `data/runs/`: writable by the service user. Contains synthetic run
-  logs only. No real PHI.
+- `data/runs/`: writable by `ubuntu`. Contains synthetic run logs only.
 
 ### Process isolation
 
 - The backend runs as user `ubuntu` under systemd, not as root.
-- `uvicorn` binds to `127.0.0.1:8000` (localhost only). External
-  access is through Caddy + Cloudflare Tunnel.
-
-### No application-level auth
-
-The backend has no authentication. Access control comes from
-Cloudflare Access. For this prototype with synthetic data, this is
-acceptable. Anyone who bypasses Cloudflare Access (e.g., direct VPS
-access) can run pipelines and approve runs.
+- Caddy runs as its own user with access to ports 80/443.
 
 ---
 
 ## Preflight Checklist
 
-Run before every deployment or redeployment.
-
 ### Secrets
 
 - [ ] `backend/.env` exists and contains `ANTHROPIC_API_KEY`.
 - [ ] `backend/.env` is NOT committed to the repository.
-- [ ] `infra/group_vars/all.sops.yml` is up to date (edit via `sops` after rotation).
+- [ ] `infra/group_vars/all.sops.yml` is up to date.
 - [ ] `grep -r "sk-ant" .` returns empty (no hardcoded keys).
-- [ ] `chmod 600 backend/.env` (readable only by service user).
+- [ ] `chmod 600 backend/.env`.
 
 ### CORS
 
-- [ ] `FRONTEND_URL` in `.env` matches `https://workbench.yuanliu.dev`.
-- [ ] `VITE_API_BASE` was set correctly when the frontend was last built.
-- [ ] Both values use `https://` (not `http://`).
+- [ ] `FRONTEND_URL` in `.env` is `https://workbench.yuanliu.dev`.
+- [ ] `VITE_API_BASE` was set to the same domain at last build.
+- [ ] Both use `https://`.
 
-### Access Control
+### Network
 
-- [ ] Cloudflare Access policy is active for `workbench.yuanliu.dev`.
-- [ ] `cloudflared` service is running (`systemctl status cloudflared`).
-- [ ] No ports other than SSH are exposed on the VPS firewall.
+- [ ] Caddy is running and serving TLS on port 443.
+- [ ] Only ports 22, 80, 443 are open on the VPS firewall.
+- [ ] uvicorn binds to `127.0.0.1`, not `0.0.0.0`.
 
 ### Data
 
@@ -116,13 +110,12 @@ Run before every deployment or redeployment.
           --include="*.json" --include="*.md"
       ```
 - [ ] No real patient data in any case packet.
-- [ ] `data/runs/` contains only synthetic run logs.
 
 ### Health
 
 - [ ] `curl http://localhost:8000/health` returns `{"status":"ok","phase":"3"}`.
-- [ ] `curl https://workbench.yuanliu.dev/health` returns the same (through tunnel).
-- [ ] systemd service is active: `systemctl is-active denial-review-workbench`.
+- [ ] `curl https://workbench.yuanliu.dev/health` returns the same.
+- [ ] `systemctl is-active denial-review-workbench` returns `active`.
 
 ---
 
@@ -131,18 +124,18 @@ Run before every deployment or redeployment.
 **API key exposed:**
 1. Rotate the key on the Anthropic dashboard.
 2. Edit secrets: `sops infra/group_vars/all.sops.yml`
-3. Re-deploy: `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml --tags secrets` (restarts service automatically)
+3. Re-deploy: `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml --tags secrets`
 4. Review Anthropic usage logs for unauthorized calls.
 
 **VPS compromised:**
 1. Rotate `ANTHROPIC_API_KEY` immediately.
 2. Rotate the `age` key and re-encrypt all secrets.
-3. Review `cloudflared` tunnel credentials.
-4. Review Cloudflare Access audit logs.
+3. Review SSH authorized keys.
+4. Consider rotating Let's Encrypt certificates (Caddy handles this).
 
 **Excessive pipeline calls:**
 1. Check Anthropic usage dashboard.
-2. Tighten Cloudflare Access policy (restrict to specific emails).
-3. Consider adding rate limiting at the Caddy layer.
+2. Add rate limiting at the Caddy layer.
+3. Restrict access via IP allowlist in Caddyfile if needed.
 
 There is no PII exposure risk. All case data is synthetic.

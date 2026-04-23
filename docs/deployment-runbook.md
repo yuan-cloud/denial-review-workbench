@@ -1,14 +1,15 @@
 # Deployment Runbook
 
-Hosted deployment topology for the Denial Review Workbench.
-Single-host plan on the existing Contabo VPS.
+Hosted deployment for the Denial Review Workbench.
+Single Contabo VPS with Caddy, systemd, and Let's Encrypt.
 
-> **Plan history (2026-04-22):** The original runbook recommended a
-> split topology (Vercel static SPA + Railway/Render container). That
-> plan was replaced with a single-host Contabo deployment after
-> evaluating operational simplicity, cost, and the fact that the VPS
-> already hosts the development environment. The Vercel-first guidance
-> and `vercel.json` have been removed.
+> **Plan history (2026-04-22):** Two earlier plans were evaluated and
+> replaced. The original split topology (Vercel SPA + Railway container)
+> was replaced by a Cloudflare Tunnel + Access plan, which was then
+> simplified to the current approach: direct Caddy exposure with Let's
+> Encrypt TLS, no Cloudflare Tunnel, no Cloudflare Access. The site
+> (`yuanliu.dev`) stays on Vercel. DRW is served from the Contabo VPS
+> at `workbench.yuanliu.dev` via a Vercel DNS A record.
 
 ---
 
@@ -18,45 +19,36 @@ Single-host plan on the existing Contabo VPS.
 Internet
   │
   ▼
-Cloudflare DNS (workbench.yuanliu.dev)
+Vercel DNS: workbench.yuanliu.dev → A record → Contabo VPS IP
   │
   ▼
-Cloudflare Tunnel (cloudflared on Contabo)
+Caddy (port 443, Let's Encrypt TLS)
+  ├─ /health, /cases, /runs/*, /demo-fallback/*  →  localhost:8000
+  └─ /*  →  frontend/dist/ (static SPA)
   │
   ▼
-Caddy (reverse proxy + static file server)
-  ├─ /api/*  →  localhost:8000 (uvicorn)
-  └─ /*      →  frontend/dist/ (static SPA)
-  │
-  ▼
-Contabo VPS (single host)
-  ├─ uvicorn (systemd service, single worker)
+Contabo VPS
+  ├─ uvicorn (systemd: denial-review-workbench, single worker)
   ├─ data/runs/ (local filesystem, JSONL append)
-  └─ sops + age (encrypted secrets)
+  └─ sops + age secrets (via Ansible)
 ```
 
 **Domain:** `workbench.yuanliu.dev`
-**Ingress:** Cloudflare Tunnel (no exposed ports on VPS)
-**Access control:** Cloudflare Access (protected preview)
-**TLS:** Cloudflare-managed (tunnel endpoint)
+**DNS:** Vercel DNS A record pointing to the Contabo VPS IP
+**TLS:** Let's Encrypt via Caddy (automatic)
+**Site:** `yuanliu.dev` stays on Vercel (unrelated to this deployment)
 
 ---
 
-## Why Single Host
+## Why This Path
 
-The backend's architectural constraints (writable JSONL filesystem,
-single-worker in-memory state, 10-15s pipeline requests) require a
-persistent long-lived process. The Contabo VPS already provides this
-for the development environment. Running the production deployment on
-the same host eliminates:
+The backend needs a writable filesystem, a single long-lived worker,
+and tolerance for 10-15s requests. A VPS provides all three. Caddy
+handles TLS automatically via Let's Encrypt. No tunnel, no edge
+proxy, no container orchestrator.
 
-- Container platform costs (Railway/Render/Fly.io)
-- Split-host CORS coordination
-- Separate secret management per platform
-- Network latency between frontend and backend
-
-The frontend is a static SPA that Caddy serves directly from the build
-output directory. No separate hosting platform is needed.
+The frontend is a static SPA. Caddy serves the build output directly
+alongside the API reverse proxy. One process handles both.
 
 ---
 
@@ -67,7 +59,7 @@ output directory. No separate hosting platform is needed.
 ```ini
 # /etc/systemd/system/denial-review-workbench.service
 [Unit]
-Description=Denial Review Backend
+Description=Denial Review Workbench
 After=network.target
 
 [Service]
@@ -83,46 +75,13 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-Key settings:
-- `--host 127.0.0.1`: bind to localhost only. Caddy proxies external traffic.
-- No `--workers` flag: single-worker constraint is architectural.
-- No `--reload` flag: production mode.
-- `EnvironmentFile`: loads `ANTHROPIC_API_KEY` from `.env` (written by Ansible `secrets` role).
+- `--host 127.0.0.1`: localhost only. Caddy proxies external traffic.
+- No `--workers`: single-worker constraint is architectural.
+- No `--reload`: production mode.
+- `EnvironmentFile`: `.env` written by Ansible `secrets` role.
 - `Restart=on-failure`: auto-restart on crash, 5s backoff.
 
-### Frontend: Caddy static serving
-
-Build the frontend and let Caddy serve the output:
-
-```bash
-cd frontend && bun install && bun run build
-```
-
-Caddy serves `frontend/dist/` for all non-API paths. SPA fallback
-(try_files) ensures client-side routing works if ever added.
-
-### Caddy: reverse proxy + static
-
-```
-workbench.yuanliu.dev {
-    handle /api/* {
-        reverse_proxy localhost:8000
-    }
-    handle {
-        root * /data/projects/denial-review-workbench/frontend/dist
-        try_files {path} /index.html
-        file_server
-    }
-}
-```
-
-Note: the backend routes do not currently use an `/api/` prefix. The
-Caddy config above assumes either:
-1. Adding a `root_path="/api"` to the FastAPI app, or
-2. Using `handle_path /api/*` with `strip_prefix` to remove `/api/`
-   before proxying to uvicorn.
-
-The simpler alternative is proxying specific backend paths:
+### Caddy
 
 ```
 workbench.yuanliu.dev {
@@ -146,21 +105,31 @@ workbench.yuanliu.dev {
 }
 ```
 
-This avoids any backend code changes. Choose one approach during
-implementation.
+Caddy obtains and renews TLS certificates from Let's Encrypt
+automatically. No manual certificate management. The per-route proxy
+approach avoids backend code changes (no `/api/` prefix needed).
 
-### Cloudflare Tunnel
+### Frontend build
 
-`cloudflared` runs as a systemd service on the VPS and connects to
-Cloudflare's edge. No ports are exposed on the VPS firewall. All
-external traffic arrives through the tunnel.
+```bash
+cd frontend && bun install && \
+    VITE_API_BASE=https://workbench.yuanliu.dev bun run build
+```
 
-### Cloudflare Access
+Build output goes to `frontend/dist/`. Caddy serves it as static
+files with SPA fallback.
 
-Cloudflare Access gates `workbench.yuanliu.dev` behind an
-authentication policy (email allowlist or one-time PIN). This replaces
-the Vercel Deployment Protection model. The protection applies to both
-frontend and API routes since all traffic flows through the tunnel.
+---
+
+## DNS
+
+Add one A record in Vercel DNS for `yuanliu.dev`:
+
+| Type | Name | Value |
+|------|------|-------|
+| A | workbench | `<Contabo VPS IP>` |
+
+This resolves `workbench.yuanliu.dev` to the VPS. Caddy handles TLS.
 
 ---
 
@@ -173,77 +142,33 @@ frontend and API routes since all traffic flows through the tunnel.
 | `ANTHROPIC_API_KEY` | Yes | Anthropic API key for live pipeline |
 | `FRONTEND_URL` | Yes | `https://workbench.yuanliu.dev` (CORS origin) |
 
-The backend reads `FRONTEND_URL` for CORS (`main.py:26`). This must
-match the Cloudflare domain exactly.
-
 ### Frontend (build-time)
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `VITE_API_BASE` | Yes | Backend URL (baked in at build time) |
+| `VITE_API_BASE` | Yes | `https://workbench.yuanliu.dev` (baked at build) |
 
-For the single-host deployment, set this to the same domain as the
-frontend (e.g., `https://workbench.yuanliu.dev`). The Caddy config
-routes API requests to the backend.
+For single-host deployment, both point to the same domain.
 
 ---
 
 ## Secrets Management
 
-### sops + age (via Ansible)
+Secrets are encrypted in `infra/group_vars/all.sops.yml` (sops + age).
+The Ansible `secrets` role templates `backend/.env` (mode 0600) at
+deploy time.
 
-Secrets are encrypted at rest in `infra/group_vars/all.sops.yml` using
-sops with age keys. The Ansible `secrets` role templates `backend/.env`
-from the decrypted vault variables at deploy time.
+**Bootstrap:** `cd infra && ./scripts/sops-setup.sh`
 
-**Bootstrap:** Run `infra/scripts/sops-setup.sh` once to generate the
-age keypair and configure `infra/.sops.yaml` with the public key.
+**Edit secrets:** `sops infra/group_vars/all.sops.yml`
 
-**Edit secrets:**
+**Deploy secrets:**
 ```bash
-sops infra/group_vars/all.sops.yml
+ansible-playbook -i infra/inventory/hosts.yml infra/site.yml --tags secrets
 ```
 
-SOPS opens `$EDITOR`. Replace placeholder values with real secrets.
-The file is encrypted on save. The committed version contains only
-ciphertext.
-
-**Deploy secrets:** `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml --tags secrets`
-writes `backend/.env` (mode 0600) from the `backend.env.j2` template.
-
-The plaintext `backend/.env` must never be committed. The encrypted
-`infra/group_vars/all.sops.yml` is safe to commit.
-
-### Rotation
-
-Rotate `ANTHROPIC_API_KEY` if:
-- The key appears in any log, screenshot, or deployment artifact.
-- The `.env` file is accidentally committed.
-- The VPS is compromised.
-
-After rotation: edit secrets via `sops infra/group_vars/all.sops.yml`,
-then re-deploy: `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml --tags secrets`. The handler
-restarts the backend service automatically.
-
----
-
-## Backups
-
-### Cloudflare R2
-
-JSONL run logs (`data/runs/`) are the critical persistent data.
-Encrypted backups to Cloudflare R2:
-
-```bash
-tar czf - data/runs/ | age -r $(cat ~/.config/sops/age/keys.txt | grep "public key" | cut -d: -f2 | tr -d ' ') \
-    > /tmp/runs-backup-$(date +%Y%m%d).tar.gz.age
-
-# Upload to R2
-aws s3 cp /tmp/runs-backup-*.tar.gz.age s3://denial-review-backups/ \
-    --endpoint-url https://<account-id>.r2.cloudflarestorage.com
-```
-
-Schedule as a cron job. Retain at least 7 daily backups.
+The handler restarts the backend service automatically after writing
+`.env`.
 
 ---
 
@@ -254,14 +179,6 @@ curl https://workbench.yuanliu.dev/health
 # Expected: {"status":"ok","phase":"3"}
 ```
 
-For systemd-level monitoring, add a health check timer:
-
-```bash
-# Check every 60 seconds
-systemctl status denial-review-workbench
-curl -sf http://localhost:8000/health || systemctl restart denial-review-workbench
-```
-
 ---
 
 ## Deployment Steps
@@ -270,16 +187,14 @@ curl -sf http://localhost:8000/health || systemctl restart denial-review-workben
 
 1. Bootstrap secrets: `cd infra && ./scripts/sops-setup.sh`
 2. Edit secrets: `sops infra/group_vars/all.sops.yml`
-3. Run Ansible: `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml`
-4. Build frontend: `cd frontend && bun install && VITE_API_BASE=https://workbench.yuanliu.dev bun run build`
-5. Configure Caddy with the Caddyfile above.
-6. Install and configure `cloudflared` tunnel.
-7. Configure Cloudflare Access policy for `workbench.yuanliu.dev`.
-8. Start backend: `systemctl start denial-review-workbench`
-9. Verify: `curl http://localhost:8000/health`
-10. Verify: `curl https://workbench.yuanliu.dev/health`
+3. Add DNS A record for `workbench` in Vercel DNS.
+4. Run Ansible: `ansible-playbook -i infra/inventory/hosts.yml infra/site.yml`
+5. Build frontend: `cd frontend && bun install && VITE_API_BASE=https://workbench.yuanliu.dev bun run build`
+6. Install Caddy Caddyfile (see above).
+7. Start services: `systemctl start caddy denial-review-workbench`
+8. Verify: `curl https://workbench.yuanliu.dev/health`
 
-### Redeployment (after code changes)
+### Redeployment
 
 ```bash
 cd /data/projects/denial-review-workbench
@@ -287,5 +202,5 @@ git pull --ff-only
 cd frontend && bun install && VITE_API_BASE=https://workbench.yuanliu.dev bun run build
 cd ..
 systemctl restart denial-review-workbench
-curl -sf http://localhost:8000/health && echo "OK" || echo "FAIL"
+curl -sf https://workbench.yuanliu.dev/health && echo "OK" || echo "FAIL"
 ```
