@@ -1,15 +1,35 @@
-# Encrypted secrets — edit with: sops infra/group_vars/all.sops.yml
+#ENC[AES256_GCM,data:NrRyP/qmxJFDb+vEw3JOmMqaDNXqICjZeO5afjeLOv9jkbTFYNoda3uVTKMpuGIRU/7vYsSt7gb7O99Fr2wAk0vlPp8=,iv:4+v2wjpvTsqXfIAGPKNFMSGjQ6ttnztz1QP7Hz6xxtY=,tag:RlDrH1tLQZN5yIEki5FoSQ==,type:comment]
 #
-# This is a PLACEHOLDER. After running scripts/sops-setup.sh, replace
-# this file by running:
-#   sops infra/group_vars/all.sops.yml
+#ENC[AES256_GCM,data:3nvSKpXRuwkqoK/BOeatQSnjoCc7I9DSM2FZjPoK8sS61r5F1VN+pSNtJL4mozo2E+vJ1rPTJFR0fLqNVmP+DLAEHE8=,iv:0P3uJiseuTQX5zUqrulat0Zo/DrCuwwLfRMkfPcDF38=,tag:IUwqACPnlTjKwy4nz05x+w==,type:comment]
+#ENC[AES256_GCM,data:hoSAIS/Bfis+erUj+g94GqunLj4eVQ==,iv:ZrNJcP525lI9JU7aNaejCLNDlxTKxMvMtrFA/pPes6E=,tag:ryFzabWU2FPQ33TMj241SQ==,type:comment]
+#ENC[AES256_GCM,data:Ps8yzC1k+dY28ZdLNmewxl+QRXthX/SUKOciTjBh9kncc+Z04A==,iv:gGtyPC007TCvUZyk9JXp3CGShgtfGTeavIC9dllVi2Q=,tag:xE9zVGeGqBAUqUEZPQ3sdw==,type:comment]
 #
-# SOPS will encrypt on save. The committed version contains only ciphertext.
+#ENC[AES256_GCM,data:FxqAMOp8GWKzTqAtltzMDoBUJk8EYfeAXh32Hc2txjBZbVvNqKcnj12g2VbMnW8xeKVFC0gv1pCzJYAm8P+MYZDv6xfaR2hztVBe,iv:zMXQ9iforDGU64Aar5slhdbzpaZcgRkW5EaL690jmvo=,tag:cbbPb5Y/PSfGM000fcBuXQ==,type:comment]
 #
-# Required secret for the current deploy (Contabo + Caddy + systemd):
-vault_anthropic_api_key: PLACEHOLDER_RUN_SOPS_SETUP
+#ENC[AES256_GCM,data:wsQpQyeZ8cW71iClyTqvOBb1Iu94DQ7wYcp1yq98rWcDFZg+RX+hOBXSG599zfKc340zXoLtnKQNbhd2TCr3Wg6W658=,iv:N/u0/D9/eA9BJiWNsxzRVyoUoR/vF8TrZqUYkuBLwrk=,tag:FaNvrMX1h9lqEjU0m743qg==,type:comment]
+vault_anthropic_api_key: ENC[AES256_GCM,data:GncpW0BfKPFJhMB8XdFr7rWKMk5IJZWTAyKJ4/zICP0EruVcJ9az7h4bGThp9ircj/cYEA/SydkJGenhRap/iJtyjg8ZtSmg7DORjAcTXWmFjybWX7IXBUgDnfmNOv4MxUngCh+bqGLf2Zr0,iv:ziVEnghDI/ZSvbvie5Z4wiW7ffkrUW6DXhc7wuscxqc=,tag:SrSvdklnpl4/cN78ftk67g==,type:str]
 #
-# Stale keys removed (2026-04-23):
-#   vault_cloudflare_tunnel_token — removed; Cloudflare Tunnel is not
-#   part of the current launch path (direct Caddy + Let's Encrypt).
-#   vault_ansible_host — removed earlier; host IP is in inventory.
+#ENC[AES256_GCM,data:ageMKBHD3SqhN5MgoX/dXv918DESmQWlTO7QVCnHAZLf,iv:/HmPhoBwn3V4b3Cr7HuMPUdFJuh8Pben9D1pFkjwcMM=,tag:Ff4fj7gAAnd5Hh0rWRBeZw==,type:comment]
+#ENC[AES256_GCM,data:z5LL0r6+Dl1YcD51BpzTFQAy9rWHWm+dkU/WEPBuxpoRGtbhAd1HzvgcIioKe0z65llIjisM3aTleu43ZmS7yVvsOmg79A==,iv:GZ6QX/iU8m7h02I6vkmnGG7mpEN2XNSGm5xby1oykSk=,tag:iBW3t080bqnnIWXHpcf+Kg==,type:comment]
+#ENC[AES256_GCM,data:AIjsPjlxLGxYTy4l1oKCwe3K8iPCHwjx7EZhjixgZPHZW0n0p0SW4mfzZsjbssJG9FC0VDRx+qi5FfgptISASsVs,iv:ar1rkZMNG83jBbB4qsXQfifGNsWF4MDvl5uyI++OwHk=,tag:ZWMmGEeBC11MwzBdFnQnBQ==,type:comment]
+#ENC[AES256_GCM,data:Ac9TnL7m8lMh2qvEYHMdPloEadMvIkQzcW1U9ZmdDiDuf+I3CJYci4C/kbq0ZWpTDRbizQ2CNeStwy9rG4g5F4IXYA==,iv:Pcyof9gB9pACydrjMRtTH4J9Trbedz8y0RUtFe/KJ0w=,tag:dySlPNyrxPdno/b0xdE52w==,type:comment]
+sops:
+    kms: []
+    gcp_kms: []
+    azure_kv: []
+    hc_vault: []
+    age:
+        - recipient: age19trv2gs50xud0e6hsyf3j48cq5vtmg2curk92aktv78rg4uczfeq0ry3jf
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBZT0RUa0NGbjk1QVdoNFVD
+            UGZYUmVjTjIwWGVXdEp4SEN1bS94WEs5NzFvCjl1UHc5enRKZE1KRk5GbWhaWmNZ
+            MHNqSmx1WlFFY2VzazZvdVJBQmw0b2sKLS0tIGh3U3Zva2daRWgrUDhFUlM5RnBr
+            YnRLb1dTdU1vRSszNERwcVFJUFY0eUkKWkKjgSlDctHAZ75YO+AM7Djx5Be4eg0u
+            25sxVVmqmqr++f3ncJIzGgyc5P/tN7yJ73uC1svdA9UR3iGff33Vdg==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-04-23T03:59:00Z"
+    mac: ENC[AES256_GCM,data:hh4hAzEYfI+MRy+2XIJnK/IbyjjtELY+LQs95dsxGW3f303VpNdNU2YjXnOphO/EbDnbg5iw+dy5h+c98ePLBxD+exm3pQjb4ApjwY88QgY+GQdMsDQF7SuHWlENfs8HjHjWuxhANQNu7V+PrjYDY0V8j8+CFgxrF80u4OuXFic=,iv:Ktf4Yo4uraRNu+x2fpuVv5+LyPpUSbAIVuwP151DTgw=,tag:6jhUvEc4+Tt+g+oe2hmdWA==,type:str]
+    pgp: []
+    unencrypted_suffix: _unencrypted
+    version: 3.9.4
