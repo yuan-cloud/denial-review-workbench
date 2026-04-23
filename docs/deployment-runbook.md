@@ -199,8 +199,6 @@ curl https://workbench.yuanliu.dev/health
 ```bash
 cd /data/projects/denial-review-workbench
 git pull --ff-only
-cd frontend && bun install && VITE_API_BASE=https://workbench.yuanliu.dev bun run build
-cd ..
-systemctl restart denial-review-workbench
+ansible-playbook -i infra/inventory/hosts.yml infra/site.yml
 curl -sf https://workbench.yuanliu.dev/health && echo "OK" || echo "FAIL"
 ```
