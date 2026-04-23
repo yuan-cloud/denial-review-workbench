@@ -1,0 +1,37 @@
+# Backend role: install Python deps, deploy systemd unit, start service.
+---
+- name: Install Python dependencies
+  ansible.builtin.pip:
+    requirements: "{{ backend_dir }}/requirements.txt"
+    virtualenv: "{{ backend_dir }}/.venv"
+    virtualenv_command: python3 -m venv
+  become_user: ubuntu
+
+- name: Install systemd unit
+  ansible.builtin.template:
+    src: denial-review-workbench.service.j2
+    dest: /etc/systemd/system/{{ backend_service }}.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload and restart backend
+
+- name: Enable backend service
+  ansible.builtin.systemd:
+    name: "{{ backend_service }}"
+    enabled: true
+    daemon_reload: true
+
+- name: Ensure backend is running
+  ansible.builtin.systemd:
+    name: "{{ backend_service }}"
+    state: started
+
+- name: Verify health endpoint
+  ansible.builtin.uri:
+    url: "{{ health_url }}"
+    return_content: true
+  register: health_check
+  retries: 5
+  delay: 2
+  until: health_check.status == 200

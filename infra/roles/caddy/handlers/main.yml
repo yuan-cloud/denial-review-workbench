@@ -1,0 +1,6 @@
+# Handlers for the caddy role.
+---
+- name: reload caddy
+  ansible.builtin.systemd:
+    name: caddy
+    state: reloaded

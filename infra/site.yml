@@ -4,11 +4,9 @@
 #   ansible-playbook -i infra/inventory/hosts.yml infra/site.yml
 #   ansible-playbook -i infra/inventory/hosts.yml infra/site.yml --tags secrets
 #
-# Later beads will add roles for:
-#   - caddy (reverse proxy + static frontend serving)
-#   - backend (systemd unit + uvicorn)
-#   - tunnel (Cloudflare Tunnel + Access)
-#   - backup (Cloudflare R2 encrypted JSONL backup)
+# Roles run in order: common → secrets → backend → caddy.
+# Backend must start before Caddy so the health check in the backend
+# role passes before Caddy begins proxying to it.
 ---
 - name: Deploy Denial Review Workbench
   hosts: workbench
@@ -25,3 +23,7 @@
       tags: [common]
     - role: secrets
       tags: [secrets]
+    - role: backend
+      tags: [backend]
+    - role: caddy
+      tags: [caddy]

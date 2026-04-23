@@ -1,0 +1,54 @@
+# Caddy role: install Caddy, deploy Caddyfile, build frontend, start.
+---
+- name: Install Caddy via official apt repo
+  block:
+    - name: Add Caddy GPG key
+      ansible.builtin.apt_key:
+        url: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
+        state: present
+
+    - name: Add Caddy apt repo
+      ansible.builtin.apt_repository:
+        repo: "deb https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main"
+        state: present
+        filename: caddy-stable
+
+    - name: Install Caddy
+      ansible.builtin.apt:
+        name: caddy
+        state: present
+        update_cache: true
+
+- name: Deploy Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "caddy validate --config %s --adapter caddyfile"
+  notify: reload caddy
+
+- name: Build frontend
+  block:
+    - name: Install frontend dependencies
+      ansible.builtin.command:
+        cmd: /home/ubuntu/.bun/bin/bun install
+        chdir: "{{ app_root }}/frontend"
+      become_user: ubuntu
+      changed_when: true
+
+    - name: Build frontend static assets
+      ansible.builtin.command:
+        cmd: /home/ubuntu/.bun/bin/bun run build
+        chdir: "{{ app_root }}/frontend"
+      become_user: ubuntu
+      environment:
+        VITE_API_BASE: "https://{{ app_domain }}"  # resolveApiBase() falls back to localhost if empty
+      changed_when: true
+
+- name: Ensure Caddy is enabled and running
+  ansible.builtin.systemd:
+    name: caddy
+    enabled: true
+    state: started

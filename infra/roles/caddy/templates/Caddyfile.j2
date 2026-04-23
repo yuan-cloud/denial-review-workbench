@@ -1,0 +1,32 @@
+# Managed by Ansible — do not edit manually.
+# Source: infra/roles/caddy/templates/Caddyfile.j2
+#
+# Caddy handles TLS automatically via Let's Encrypt once DNS points
+# {{ app_domain }} at this host's public IP. No manual certificate
+# management required.
+#
+# Backend routes are proxied explicitly by path. The backend does not
+# use an /api/ prefix — routes are proxied verbatim to uvicorn.
+
+{{ app_domain }} {
+    # Backend API routes — proxy to uvicorn on localhost
+    handle /health {
+        reverse_proxy 127.0.0.1:{{ backend_port }}
+    }
+    handle /cases {
+        reverse_proxy 127.0.0.1:{{ backend_port }}
+    }
+    handle /runs* {
+        reverse_proxy 127.0.0.1:{{ backend_port }}
+    }
+    handle /demo-fallback* {
+        reverse_proxy 127.0.0.1:{{ backend_port }}
+    }
+
+    # Frontend — static SPA from build output
+    handle {
+        root * {{ frontend_dist }}
+        try_files {path} /index.html
+        file_server
+    }
+}

@@ -1,0 +1,22 @@
+# Managed by Ansible — do not edit manually.
+# Source: infra/roles/backend/templates/denial-review-workbench.service.j2
+#
+# Single-worker constraint is architectural: state.py stores run state
+# in a module-level dict that is not thread-safe and not shared across
+# workers. Do not add --workers. See AGENTS.md "TECH STACK" section.
+[Unit]
+Description=Denial Review Workbench Backend
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory={{ backend_dir }}
+EnvironmentFile={{ backend_dir }}/.env
+ExecStart={{ backend_dir }}/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port {{ backend_port }}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

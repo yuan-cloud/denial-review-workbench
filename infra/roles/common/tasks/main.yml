@@ -17,6 +17,21 @@
       - git
     state: present
 
+- name: Install Bun (frontend build toolchain)
+  block:
+    - name: Check if Bun is installed
+      ansible.builtin.command: bun --version
+      register: bun_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install Bun via official installer
+      ansible.builtin.shell: curl -fsSL https://bun.sh/install | bash
+      become_user: ubuntu
+      when: bun_check.rc != 0
+      args:
+        creates: /home/ubuntu/.bun/bin/bun
+
 - name: Ensure app data directory exists
   ansible.builtin.file:
     path: "{{ data_dir }}/runs"
