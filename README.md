@@ -2,6 +2,9 @@
 
 **Auditable human-in-the-loop denial review for document-heavy healthcare ops**
 
+🔗 Live demo: https://workbench.yuanliu.dev
+Try `case-002` for the main demo arc (missing documents path and approval flow).
+
 Denial review pipelines process a full case — extraction, gap analysis, draft — typically in under 15 seconds. Replay any approved run: status is preserved, no model call is made, and the JSONL log is unchanged. Verify it yourself: `./bench.sh` (pipeline), `./scripts/replay_integrity.sh` (replay invariant), and `./scripts/export_to_vifei.sh` (share-safe Vifei export)
 
 ---
@@ -62,37 +65,36 @@ Conflicting denial reasons trigger `should_escalate: true`. A red banner blocks 
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Three-Panel UI                        │
-│  Documents + Policy  │  Facts + Gap + Draft  │  History  │
-└──────────────────────┴───────────────────────┴───────────┘
-                              │
-                    POST /runs (sync)
-                              │
-┌─────────────────────────────────────────────────────────┐
-│                   FastAPI Backend                        │
-│                                                          │
-│  extract_facts → policy_search → analyze_gap →          │
-│  draft_next_action (if not escalated)                    │
-│                                                          │
-│  All calls through anthropic_client.py (single entry)   │
-│  At most 3 model calls per run                           │
-└──────────────────────────────┬──────────────────────────┘
-                               │
-              ┌────────────────┴────────────────┐
-              │         JSONL Event Store        │
-              │  data/runs/{run_id}.jsonl        │
-              │  Append-only. Never rewritten.   │
-              │  Full payloads for replay.       │
-              └────────────────┬────────────────┘
-                               │
-              ┌────────────────┴────────────────┐
-              │            replay.py             │
-              │  Read-only JSONL reconstruction  │
-              │  Never calls model providers     │
-              │  Never writes new events         │
-              └─────────────────────────────────┘
+```mermaid
+flowchart TD
+    UI["Three-Panel UI<br/>Documents + Policy · Facts + Gap + Draft · History"]
+    POST["POST /runs (sync)"]
+
+    subgraph BACKEND["FastAPI Backend<br/>At most 3 model calls per run"]
+        EF["extract_facts<br/>model call 1"]
+        PS["policy_search"]
+        AG["analyze_gap<br/>model call 2"]
+        DN["draft_next_action<br/>model call 3<br/>(if not escalated)"]
+        AC["anthropic_client.py<br/>single entry for model calls"]
+        EF --> PS --> AG --> DN
+        AC -.-> EF
+        AC -.-> AG
+        AC -.-> DN
+    end
+
+    subgraph STORE["JSONL Event Store"]
+        JSONL["data/runs/{run_id}.jsonl<br/>Append-only. Never rewritten.<br/>Full payloads for replay."]
+    end
+
+    subgraph REPLAY["replay.py"]
+        R["Read-only JSONL reconstruction<br/>Never calls model providers<br/>Never writes new events"]
+    end
+
+    UI --> POST --> EF
+    EF --> JSONL
+    AG --> JSONL
+    DN --> JSONL
+    JSONL --> R
 ```
 
 **Three model calls, strict order:**
@@ -126,7 +128,7 @@ Replay 10: completed in 46ms, JSONL lines: 3 (unchanged) ✓
 10/10 replays verified. Zero events written during replay.
 ```
 
-**Vifei export proof:** `scripts/export_to_vifei.sh` normalizes a workbench run into Vifei's `CommittedEvent` format and produces a share-safe bundle via `vifei export`. The workbench JSONL is not Vifei EventLog — the script bridges the two schemas without modifying the source log. The bridge contract is documented in `docs/vifei-bridge-contract.md`.
+**[Vifei](https://github.com/yuan-cloud/vifei-suite-public) export proof:** `scripts/export_to_vifei.sh` normalizes a workbench run into Vifei's `CommittedEvent` format and produces a share-safe bundle via `vifei export`. The workbench JSONL is not Vifei EventLog — the script bridges the two schemas without modifying the source log. The bridge contract is documented in `docs/vifei-bridge-contract.md`.
 
 ```bash
 ./scripts/export_to_vifei.sh run-case-002-20260416075553
