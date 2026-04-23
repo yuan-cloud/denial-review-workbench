@@ -84,7 +84,12 @@ WantedBy=multi-user.target
 ### Caddy
 
 ```
-workbench.yuanliu.dev {
+http://workbench.yuanliu.dev {
+    @non_acme not path /.well-known/acme-challenge/*
+    redir @non_acme https://workbench.yuanliu.dev{uri}
+}
+
+https://workbench.yuanliu.dev {
     handle /health {
         reverse_proxy localhost:8000
     }
@@ -107,7 +112,9 @@ workbench.yuanliu.dev {
 
 Caddy obtains and renews TLS certificates from Let's Encrypt
 automatically. No manual certificate management. The per-route proxy
-approach avoids backend code changes (no `/api/` prefix needed).
+approach avoids backend code changes (no `/api/` prefix needed), and
+the explicit HTTP block preserves ACME HTTP-01 while redirecting normal
+traffic to HTTPS.
 
 ### Frontend build
 

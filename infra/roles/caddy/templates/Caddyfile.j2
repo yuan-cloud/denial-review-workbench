@@ -8,7 +8,12 @@
 # Backend routes are proxied explicitly by path. The backend does not
 # use an /api/ prefix — routes are proxied verbatim to uvicorn.
 
-{{ app_domain }} {
+http://{{ app_domain }} {
+    @non_acme not path /.well-known/acme-challenge/*
+    redir @non_acme https://{{ app_domain }}{uri}
+}
+
+https://{{ app_domain }} {
     # Backend API routes — proxy to uvicorn on localhost
     handle /health {
         reverse_proxy 127.0.0.1:{{ backend_port }}
