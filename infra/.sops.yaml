@@ -5,4 +5,4 @@
 # with the real key from the generated keypair.
 creation_rules:
   - path_regex: \.sops\.yml$
-    age: "age1REPLACE_WITH_REAL_PUBLIC_KEY_FROM_SETUP"
+    age: "age19trv2gs50xud0e6hsyf3j48cq5vtmg2curk92aktv78rg4uczfeq0ry3jf"

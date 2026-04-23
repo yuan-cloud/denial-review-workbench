@@ -657,11 +657,22 @@ git push
 
 1. Run quality gates (if code changed).
 2. Run UBS on staged files: `ubs $(git diff --name-only --cached)`. Fix until exit 0.
-3. Update beads: close finished work, update in-progress items.
-4. `br sync --flush-only`.
-5. Release Agent Mail file reservations (multi-agent sessions only).
-6. Commit and push per checklist above.
-7. Produce the handoff note.
+3. Verify disk state against every completed handoff before updating bead status:
+   - inspect the actual file diff and machine state, not just the mail summary
+   - if the bead changed infra or secrets, verify the claimed path/version/key/service state on disk
+   - log the verification result back to the same Agent Mail thread before treating the bead as done
+4. Update beads: close finished work, update in-progress items.
+5. `br sync --flush-only`.
+6. Release Agent Mail file reservations (multi-agent sessions only).
+7. Commit and push per checklist above.
+8. Produce the handoff note.
+
+### Handoff verification
+
+- "Mail says done" is not enough. Review the actual changed files and any relevant host state before closing or routing follow-on work.
+- If a handoff claims a generated key, installed tool, running service, rendered secret, or other machine-state fact, verify that fact directly.
+- If the verification fails, keep the commit gate closed and reply on the bead thread with the exact mismatch.
+- Apply this gate before dispatching dependent beads, especially for deploy, infra, and secret-handling work.
 
 ### Handoff note template
 
