@@ -14,7 +14,6 @@
     owner: root
     group: root
     mode: "0644"
-  notify: reload and restart backend
 
 - name: Enable backend service
   ansible.builtin.systemd:
@@ -22,12 +21,13 @@
     enabled: true
     daemon_reload: true
 
-- name: Ensure backend is running
+- name: Restart backend from deployed code before health verification
   ansible.builtin.systemd:
     name: "{{ backend_service }}"
-    state: started
+    state: restarted
+    daemon_reload: true
 
-- name: Verify health endpoint
+- name: Verify health endpoint after backend activation
   ansible.builtin.uri:
     url: "{{ health_url }}"
     return_content: true

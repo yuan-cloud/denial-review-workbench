@@ -11,6 +11,8 @@ If the deployed code is broken, roll back to the last working commit
 and redeploy.
 
 ```bash
+set -euo pipefail
+
 cd /data/projects/denial-review-workbench
 
 # 1. Identify the last known-good commit
@@ -22,8 +24,15 @@ git checkout <known-good-sha>
 # 3. Re-run the full deploy playbook from that commit
 ansible-playbook -i infra/inventory/hosts.yml infra/site.yml
 
-# 4. Verify
-curl -sf https://workbench.yuanliu.dev/health && echo "OK" || echo "FAIL"
+# 4. Explicitly activate the checked-out backend code.
+# Older commits may not restart uvicorn for source-only changes.
+sudo systemctl restart denial-review-workbench
+
+# 5. Verify the activated rollback
+sudo systemctl is-active --quiet denial-review-workbench
+curl -fsS http://127.0.0.1:8000/health >/dev/null
+curl -fsS https://workbench.yuanliu.dev/health >/dev/null
+echo "Rollback verified."
 ```
 
 This is the preferred path because it uses the same tooling as the

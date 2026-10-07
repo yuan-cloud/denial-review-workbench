@@ -16,6 +16,8 @@
     - name: Load encrypted secrets
       community.sops.load_vars:
         file: "{{ playbook_dir }}/group_vars/all.sops.yml"
+      no_log: true
+      diff: false
       tags: [always]
 
   roles:
@@ -27,3 +29,29 @@
       tags: [backend]
     - role: caddy
       tags: [caddy]
+
+  post_tasks:
+    - name: Restart backend after secrets-only activation
+      ansible.builtin.systemd:
+        name: "{{ backend_service }}"
+        state: restarted
+        daemon_reload: true
+      when:
+        - "'all' not in ansible_run_tags"
+        - "'secrets' in ansible_run_tags"
+        - "'backend' not in ansible_run_tags"
+      tags: [secrets]
+
+    - name: Verify health endpoint after secrets-only activation
+      ansible.builtin.uri:
+        url: "{{ health_url }}"
+        return_content: true
+      register: health_check
+      retries: 5
+      delay: 2
+      until: health_check.status == 200
+      when:
+        - "'all' not in ansible_run_tags"
+        - "'secrets' in ansible_run_tags"
+        - "'backend' not in ansible_run_tags"
+      tags: [secrets]
