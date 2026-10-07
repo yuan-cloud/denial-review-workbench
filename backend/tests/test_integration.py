@@ -110,11 +110,13 @@ class TestCase002LivePipeline:
 
     def test_approve_then_replay(self, run_result):
         run_id = run_result["run_id"]
+        headers = {"Idempotency-Key": f"integration-{run_id}-case002"}
 
         # Approve
         r = httpx.post(
             f"{BASE}/runs/{run_id}/approve",
             json={"draft_text": "Integration test approved."},
+            headers=headers,
             timeout=10.0,
         )
         assert r.status_code == 200
@@ -126,6 +128,7 @@ class TestCase002LivePipeline:
         r2 = httpx.post(
             f"{BASE}/runs/{run_id}/approve",
             json={},
+            headers=headers,
             timeout=10.0,
         )
         assert r2.status_code == 409
@@ -172,10 +175,12 @@ class TestCase001LiveApproval:
 
     def test_approve_then_verify(self, run_result):
         run_id = run_result["run_id"]
+        headers = {"Idempotency-Key": f"integration-{run_id}-case001"}
 
         r = httpx.post(
             f"{BASE}/runs/{run_id}/approve",
             json={"draft_text": "Case-001 integration test approved."},
+            headers=headers,
             timeout=10.0,
         )
         assert r.status_code == 200
@@ -187,6 +192,7 @@ class TestCase001LiveApproval:
         r2 = httpx.post(
             f"{BASE}/runs/{run_id}/approve",
             json={},
+            headers=headers,
             timeout=10.0,
         )
         assert r2.status_code == 409
@@ -231,6 +237,7 @@ class TestCase003LiveEscalation:
         r = httpx.post(
             f"{BASE}/runs/{run_id}/approve",
             json={},
+            headers={"Idempotency-Key": f"integration-{run_id}-escalated"},
             timeout=10.0,
         )
         assert r.status_code == 409

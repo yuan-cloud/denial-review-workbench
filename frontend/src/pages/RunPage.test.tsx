@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import RunPage from "./RunPage";
@@ -18,6 +18,18 @@ function errorResponse(status: number, detail?: string) {
     status,
     json: () => Promise.resolve(detail ? { detail } : {}),
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+async function flushAsyncCallbacks() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 const baseRun: RunStatus = {
@@ -140,6 +152,72 @@ describe("RunPage", () => {
     await waitFor(() => {
       expect(screen.getByText("Acme")).toBeInTheDocument();
     });
+  });
+
+  it("aborts and ignores a stale fetch when the run changes", async () => {
+    const first = deferred<ReturnType<typeof okResponse>>();
+    const second = deferred<ReturnType<typeof okResponse>>();
+    mockFetch
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+
+    const { rerender } = render(
+      <RunPage caseId="case-001" runId="run-1" onBack={() => {}} />
+    );
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+    const firstSignal = mockFetch.mock.calls[0][1].signal as AbortSignal;
+
+    rerender(<RunPage caseId="case-002" runId="run-2" onBack={() => {}} />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(firstSignal.aborted).toBe(true);
+
+    const newestRun = {
+      ...baseRun,
+      run_id: "run-2",
+      case_id: "case-002",
+      facts: { ...baseRun.facts!, payer: "Newest payer" },
+    };
+    second.resolve(okResponse(newestRun));
+    await waitFor(() => {
+      expect(screen.getByText("Newest payer")).toBeInTheDocument();
+    });
+
+    first.resolve(okResponse(baseRun));
+    await waitFor(() => {
+      expect(screen.getByText("Newest payer")).toBeInTheDocument();
+      expect(screen.queryByText("Acme")).not.toBeInTheDocument();
+    });
+  });
+
+  it("ignores stale fetch rejection and cleanup while the next run loads", async () => {
+    const first = deferred<ReturnType<typeof errorResponse>>();
+    const second = deferred<ReturnType<typeof okResponse>>();
+    mockFetch.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+    const { rerender } = render(
+      <RunPage caseId="case-001" runId="run-1" onBack={() => {}} />
+    );
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+
+    rerender(<RunPage caseId="case-002" runId="run-2" onBack={() => {}} />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      first.resolve(errorResponse(500, "stale fetch failure"));
+      await flushAsyncCallbacks();
+    });
+    expect(screen.getByText("Loading run")).toBeInTheDocument();
+    expect(screen.queryByText(/stale fetch failure/)).not.toBeInTheDocument();
+
+    second.resolve(
+      okResponse({
+        ...baseRun,
+        run_id: "run-2",
+        case_id: "case-002",
+        facts: { ...baseRun.facts!, payer: "Newest payer" },
+      })
+    );
+    await waitFor(() => expect(screen.getByText("Newest payer")).toBeInTheDocument());
   });
 
   it("calls onBack when Back button clicked", async () => {
@@ -270,6 +348,221 @@ describe("RunPage", () => {
     });
   });
 
+  it("reuses the approval idempotency key after an unknown failure", async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    });
+
+    mockFetch.mockResolvedValueOnce(
+      errorResponse(503, "Approval durability is unknown")
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await waitFor(() => {
+      expect(screen.getByText("Approval did not complete")).toBeInTheDocument();
+    });
+
+    const approvedRun = { ...baseRun, status: "approved" as const };
+    mockFetch.mockResolvedValueOnce(okResponse(approvedRun));
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await waitFor(() => {
+      expect(screen.getByText("Approved ✓")).toBeInTheDocument();
+    });
+
+    const firstHeaders = mockFetch.mock.calls[1][1].headers;
+    const retryHeaders = mockFetch.mock.calls[2][1].headers;
+    expect(firstHeaders["Idempotency-Key"]).toBeTruthy();
+    expect(retryHeaders["Idempotency-Key"]).toBe(
+      firstHeaders["Idempotency-Key"]
+    );
+  });
+
+  it("ignores a stale approval success without cancelling the submitted action", async () => {
+    const staleApproval = deferred<ReturnType<typeof okResponse>>();
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    const renderResult = render(
+      <RunPage caseId="case-001" runId="run-1" onBack={() => {}} />
+    );
+    await screen.findByRole("button", { name: "Approve" });
+
+    mockFetch.mockReturnValueOnce(staleApproval.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(mockFetch.mock.calls[1][1].signal).toBeUndefined();
+
+    const newestRun = {
+      ...baseRun,
+      run_id: "run-2",
+      case_id: "case-002",
+      facts: { ...baseRun.facts!, payer: "Newest payer" },
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(newestRun));
+    renderResult.rerender(
+      <RunPage caseId="case-002" runId="run-2" onBack={() => {}} />
+    );
+    await screen.findByText("Newest payer");
+
+    await act(async () => {
+      staleApproval.resolve(
+        okResponse({ ...baseRun, status: "approved" as const })
+      );
+      await flushAsyncCallbacks();
+    });
+    expect(screen.getByText("Newest payer")).toBeInTheDocument();
+    expect(screen.queryByText("Approved ✓")).not.toBeInTheDocument();
+  });
+
+  it("isolates stale approval failure and cleanup from a newer retry", async () => {
+    const staleApproval = deferred<ReturnType<typeof errorResponse>>();
+    const currentApproval = deferred<ReturnType<typeof errorResponse>>();
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    const { rerender } = render(
+      <RunPage caseId="case-001" runId="run-1" onBack={() => {}} />
+    );
+    await screen.findByRole("button", { name: "Approve" });
+
+    mockFetch.mockReturnValueOnce(staleApproval.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    const staleKey = mockFetch.mock.calls[1][1].headers["Idempotency-Key"];
+
+    const currentRun = { ...baseRun, run_id: "run-2", case_id: "case-002" };
+    mockFetch.mockResolvedValueOnce(okResponse(currentRun));
+    rerender(<RunPage caseId="case-002" runId="run-2" onBack={() => {}} />);
+    await screen.findByRole("button", { name: "Approve" });
+
+    mockFetch.mockReturnValueOnce(currentApproval.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    const currentKey = mockFetch.mock.calls[3][1].headers["Idempotency-Key"];
+    expect(currentKey).not.toBe(staleKey);
+
+    await act(async () => {
+      staleApproval.resolve(errorResponse(503, "stale unknown outcome"));
+      await flushAsyncCallbacks();
+    });
+    expect(screen.getByRole("button", { name: "Approving…" })).toBeDisabled();
+    expect(screen.queryByText(/stale unknown outcome/)).not.toBeInTheDocument();
+
+    currentApproval.resolve(errorResponse(503, "current unknown outcome"));
+    await screen.findByText(/current unknown outcome/);
+    mockFetch.mockResolvedValueOnce(
+      okResponse({ ...currentRun, status: "approved" as const })
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByText("Approved ✓");
+
+    const retryKey = mockFetch.mock.calls[4][1].headers["Idempotency-Key"];
+    expect(retryKey).toBe(currentKey);
+  });
+
+  it("isolates stale replay failure and cleanup from a newer replay", async () => {
+    const staleReplay = deferred<ReturnType<typeof errorResponse>>();
+    const currentReplay = deferred<ReturnType<typeof okResponse>>();
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    const { rerender } = render(
+      <RunPage caseId="case-001" runId="run-1" onBack={() => {}} />
+    );
+    await screen.findByRole("button", { name: "Replay from JSONL" });
+
+    mockFetch.mockReturnValueOnce(staleReplay.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
+
+    const currentRun = { ...baseRun, run_id: "run-2", case_id: "case-002" };
+    mockFetch.mockResolvedValueOnce(okResponse(currentRun));
+    rerender(<RunPage caseId="case-002" runId="run-2" onBack={() => {}} />);
+    await screen.findByRole("button", { name: "Replay from JSONL" });
+
+    mockFetch.mockReturnValueOnce(currentReplay.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
+
+    await act(async () => {
+      staleReplay.resolve(errorResponse(500, "stale replay failure"));
+      await flushAsyncCallbacks();
+    });
+    expect(screen.getByRole("button", { name: "Replaying…" })).toBeDisabled();
+    expect(screen.queryByText(/stale replay failure/)).not.toBeInTheDocument();
+
+    currentReplay.resolve(
+      okResponse({ ...currentRun, is_replay_response: true })
+    );
+    await screen.findByText("REPLAY");
+  });
+
+  it("ignores a stale replay success while the current replay remains pending", async () => {
+    const staleReplay = deferred<ReturnType<typeof okResponse>>();
+    const currentReplay = deferred<ReturnType<typeof okResponse>>();
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    const { rerender } = render(
+      <RunPage caseId="case-001" runId="run-1" onBack={() => {}} />
+    );
+    await screen.findByRole("button", { name: "Replay from JSONL" });
+
+    mockFetch.mockReturnValueOnce(staleReplay.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
+
+    const currentRun = { ...baseRun, run_id: "run-2", case_id: "case-002" };
+    mockFetch.mockResolvedValueOnce(okResponse(currentRun));
+    rerender(<RunPage caseId="case-002" runId="run-2" onBack={() => {}} />);
+    await screen.findByRole("button", { name: "Replay from JSONL" });
+
+    mockFetch.mockReturnValueOnce(currentReplay.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
+
+    await act(async () => {
+      staleReplay.resolve(
+        okResponse({ ...baseRun, is_replay_response: true })
+      );
+      await flushAsyncCallbacks();
+    });
+    expect(screen.getByRole("button", { name: "Replaying…" })).toBeDisabled();
+    expect(screen.queryByText("REPLAY")).not.toBeInTheDocument();
+
+    currentReplay.resolve(
+      okResponse({ ...currentRun, is_replay_response: true })
+    );
+    await screen.findByText("REPLAY");
+  });
+
+  it("keeps approval terminal across same-run replay response reordering", async () => {
+    const approval = deferred<ReturnType<typeof okResponse>>();
+    const replay = deferred<ReturnType<typeof okResponse>>();
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+    await screen.findByRole("button", { name: "Approve" });
+
+    mockFetch.mockReturnValueOnce(approval.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    mockFetch.mockReturnValueOnce(replay.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
+
+    await act(async () => {
+      approval.resolve(
+        okResponse({
+          ...baseRun,
+          status: "approved" as const,
+          events: [
+            ...baseRun.events,
+            {
+              type: "approved",
+              timestamp: "2026-04-11T15:00:09Z",
+              payload: {},
+            },
+          ],
+        })
+      );
+      await flushAsyncCallbacks();
+    });
+    expect(screen.getByText("Approved ✓")).toBeInTheDocument();
+
+    await act(async () => {
+      replay.resolve(okResponse({ ...baseRun, is_replay_response: true }));
+      await flushAsyncCallbacks();
+    });
+    expect(screen.getByText("Approved ✓")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByText("REPLAY")).not.toBeInTheDocument();
+  });
+
   it("dismisses mutation error", async () => {
     mockFetch.mockResolvedValueOnce(okResponse(baseRun));
     render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
@@ -339,6 +632,101 @@ describe("RunPage", () => {
     });
     expect(screen.getByText("Acme")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry fetch" })).toBeInTheDocument();
+  });
+
+  it("ignores a stale same-run reload failure after replay succeeds", async () => {
+    const reload = deferred<ReturnType<typeof errorResponse>>();
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await screen.findByRole("button", { name: "Approve" });
+    mockFetch.mockResolvedValueOnce(errorResponse(409, "Already approved"));
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByRole("button", { name: "Reload run" });
+
+    mockFetch.mockReturnValueOnce(reload.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Reload run" }));
+    mockFetch.mockResolvedValueOnce(
+      okResponse({ ...baseRun, is_replay_response: true })
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
+    await screen.findByText("REPLAY");
+
+    await act(async () => {
+      reload.resolve(errorResponse(500, "stale reload failure"));
+      await flushAsyncCallbacks();
+    });
+
+    expect(screen.getByText("REPLAY")).toBeInTheDocument();
+    expect(screen.queryByText("Latest reload failed")).not.toBeInTheDocument();
+    expect(screen.queryByText("stale reload failure")).not.toBeInTheDocument();
+  });
+
+  it("re-enables replay and ignores a stale replay failure after reload succeeds", async () => {
+    const replay = deferred<ReturnType<typeof errorResponse>>();
+    const refreshedRun = {
+      ...baseRun,
+      facts: { ...baseRun.facts!, payer: "Reloaded payer" },
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await screen.findByRole("button", { name: "Replay from JSONL" });
+    mockFetch.mockReturnValueOnce(replay.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
+    expect(screen.getByRole("button", { name: "Replaying…" })).toBeDisabled();
+
+    mockFetch.mockResolvedValueOnce(errorResponse(409, "Already approved"));
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByRole("button", { name: "Reload run" });
+
+    mockFetch.mockResolvedValueOnce(okResponse(refreshedRun));
+    await userEvent.click(screen.getByRole("button", { name: "Reload run" }));
+    await screen.findByText("Reloaded payer");
+    expect(screen.getByRole("button", { name: "Replay from JSONL" })).toBeEnabled();
+
+    await act(async () => {
+      replay.resolve(errorResponse(500, "stale replay failure"));
+      await flushAsyncCallbacks();
+    });
+
+    expect(screen.queryByText("Replay did not complete")).not.toBeInTheDocument();
+    expect(screen.queryByText("stale replay failure")).not.toBeInTheDocument();
+  });
+
+  it("preserves a stale approval retry identity after replay wins", async () => {
+    const approval = deferred<ReturnType<typeof errorResponse>>();
+    mockFetch.mockResolvedValueOnce(okResponse(baseRun));
+    render(<RunPage caseId="case-001" runId="run-1" onBack={() => {}} />);
+
+    await screen.findByRole("button", { name: "Approve" });
+    mockFetch.mockReturnValueOnce(approval.promise);
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    const originalKey = mockFetch.mock.calls[1][1].headers["Idempotency-Key"];
+
+    mockFetch.mockResolvedValueOnce(
+      okResponse({ ...baseRun, is_replay_response: true })
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Replay from JSONL" }));
+    await screen.findByText("REPLAY");
+
+    await act(async () => {
+      approval.resolve(errorResponse(503, "stale approval outcome"));
+      await flushAsyncCallbacks();
+    });
+
+    expect(screen.queryByText("Approval did not complete")).not.toBeInTheDocument();
+    expect(screen.queryByText("stale approval outcome")).not.toBeInTheDocument();
+    await screen.findByRole("button", { name: "Approve" });
+
+    mockFetch.mockResolvedValueOnce(
+      okResponse({ ...baseRun, status: "approved" as const })
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByText("Approved ✓");
+
+    const retryKey = mockFetch.mock.calls[3][1].headers["Idempotency-Key"];
+    expect(retryKey).toBe(originalKey);
   });
 
   it("shows inline mutation error on replay failure without losing run data", async () => {

@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from app.errors import PipelineError
 from app.event_store import append_event, read_events
@@ -84,7 +85,8 @@ ACTION_TYPE_ALIASES: dict[str, str] = {
 
 
 def make_run_id(case_id: str) -> str:
-    return f"run-{case_id}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+    timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
+    return f"run-{case_id}-{timestamp}-{uuid4().hex}"
 
 
 def load_documents(case_id: str) -> list[CaseDocument]:
@@ -112,18 +114,6 @@ def _parse_json(raw: str, stage: str) -> dict:
         return json.loads(cleaned.strip())
     except json.JSONDecodeError as e:
         raise PipelineError(stage=stage, raw_response=raw, cause=e) from e
-
-
-def _normalize_facts_payload(
-    payload: dict,
-    documents: list[CaseDocument],
-) -> dict:
-    document_text = "\n".join(document.text.lower() for document in documents)
-    denial_reason = str(payload.get("denial_reason", "")).lower()
-    confidence = float(payload.get("confidence", 0.0))
-    if "approved" in denial_reason or "authorization approved" in document_text:
-        payload["confidence"] = max(confidence, 0.85)
-    return payload
 
 
 def _canonicalize_missing_item(item: str) -> str:
@@ -184,7 +174,6 @@ def extract_facts(documents: list[CaseDocument]) -> CaseFacts:
     user = "\n\n".join(f"[{doc.doc_id}]\n{doc.text}" for doc in documents)
     raw = call_model(EXTRACT_FACTS_SYSTEM, user)
     result = _parse_json(raw, "extract_facts")
-    result = _normalize_facts_payload(result, documents)
     logger.info("pipeline stage %s complete", "extract_facts")
     return CaseFacts.model_validate(result)
 

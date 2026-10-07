@@ -106,8 +106,14 @@ export async function getCases(): Promise<CaseListItem[]> {
   return requestJson<CaseListItem[]>("/cases");
 }
 
-export async function getRun(runId: string): Promise<RunStatus> {
-  return requestJson<RunStatus>(`/runs/${runId}`);
+export async function getRun(
+  runId: string,
+  signal?: AbortSignal
+): Promise<RunStatus> {
+  return requestJson<RunStatus>(
+    `/runs/${runId}`,
+    signal === undefined ? undefined : { signal }
+  );
 }
 
 export async function postRun(caseId: string): Promise<RunStatus> {
@@ -121,11 +127,18 @@ export async function postRun(caseId: string): Promise<RunStatus> {
 export async function postApprove(
   runId: string,
   draftText?: string,
-  approvedBy?: string
+  approvedBy?: string,
+  idempotencyKey?: string
 ): Promise<RunStatus> {
+  if (!idempotencyKey) {
+    throw new Error("Approval requires an idempotency key");
+  }
   return requestJson<RunStatus>(`/runs/${runId}/approve`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
     body: JSON.stringify({
       draft_text: draftText ?? null,
       approved_by: approvedBy ?? null,

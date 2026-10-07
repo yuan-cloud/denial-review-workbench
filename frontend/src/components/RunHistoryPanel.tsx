@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RunEvent } from "../types";
 import { ApiError } from "../api";
 import {
@@ -15,6 +15,7 @@ interface Props {
   events: RunEvent[];
   isReplayResponse: boolean;
   onReplay: () => Promise<void>;
+  replayInvalidation?: number;
 }
 
 const EVENT_LABELS: Record<string, string> = {
@@ -132,10 +133,22 @@ function describeReplayError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: Props) {
+export default function RunHistoryPanel({
+  events,
+  isReplayResponse,
+  onReplay,
+  replayInvalidation = 0,
+}: Props) {
   const runStartTs = events.length > 0 ? events[0].timestamp : null;
   const [replaying, setReplaying] = useState(false);
   const [replayError, setReplayError] = useState<string | null>(null);
+  const replayAttemptRef = useRef(0);
+
+  useEffect(() => {
+    replayAttemptRef.current += 1;
+    setReplaying(false);
+    setReplayError(null);
+  }, [replayInvalidation]);
   const replayButtonLabel = replaying
     ? "Replaying…"
     : isReplayResponse
@@ -143,14 +156,19 @@ export default function RunHistoryPanel({ events, isReplayResponse, onReplay }: 
       : "Replay from JSONL";
 
   async function handleReplay() {
+    const attempt = ++replayAttemptRef.current;
     setReplaying(true);
     setReplayError(null);
     try {
       await onReplay();
     } catch (error) {
-      setReplayError(describeReplayError(error));
+      if (attempt === replayAttemptRef.current) {
+        setReplayError(describeReplayError(error));
+      }
     } finally {
-      setReplaying(false);
+      if (attempt === replayAttemptRef.current) {
+        setReplaying(false);
+      }
     }
   }
 
