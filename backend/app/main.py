@@ -2,18 +2,26 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
 from app import state
+from app.approval import (
+    ApprovalAlreadyCommittedError,
+    ApprovalAuditConflictError,
+    ApprovalEscalatedError,
+    ApprovalRunNotFoundError,
+    IdempotencyConflictError,
+    InvalidIdempotencyKeyError,
+    commit_approval,
+)
 from app.errors import PipelineError
-from app.event_store import append_event, read_events, run_exists
+from app.event_store import EventPersistenceError, run_exists
 from app.pipeline import run_pipeline
-from app.replay import replay_run
+from app.replay import ReplayValidationError, replay_run
 from app.schemas import CaseListItem, ApproveRequest, RunCreateRequest, RunStatus
 
 logger = logging.getLogger(__name__)
@@ -123,6 +131,16 @@ def post_runs(body: RunCreateRequest):
     except PipelineError as e:
         logger.error("pipeline failed: %s", e, exc_info=True)
         raise HTTPException(status_code=422, detail=str(e))
+    except EventPersistenceError as exc:
+        logger.error("run persistence failed: outcome=%s", exc.outcome)
+        detail = (
+            "Run audit persistence outcome is unknown; do not retry automatically. "
+            "Operator inspection is required."
+            if exc.outcome == "unknown"
+            else "The current run audit append was not committed; do not retry "
+            "automatically. Operator inspection is required."
+        )
+        raise HTTPException(status_code=503, detail=detail) from exc
 
     state.seed(result.run_id, result.model_dump())
     return result
@@ -130,96 +148,142 @@ def post_runs(body: RunCreateRequest):
 
 @app.get("/runs/{run_id}")
 def get_run(run_id: str):
+    if run_exists(run_id):
+        try:
+            result = replay_run(run_id)
+        except ReplayValidationError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="Persisted audit log cannot be reconstructed safely.",
+            ) from exc
+        except EventPersistenceError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Persisted audit log is temporarily unavailable.",
+            ) from exc
+        if result is None:
+            raise HTTPException(status_code=409, detail=_missing_run_detail(run_id))
+        return result.model_copy(update={"is_replay_response": False})
+
     state_dict = state.get(run_id)
     if state_dict is not None:
         return RunStatus.model_validate(state_dict)
-    result = replay_run(run_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail=_missing_run_detail(run_id))
-    return result.model_copy(update={"is_replay_response": False})
+    raise HTTPException(status_code=404, detail=_missing_run_detail(run_id))
 
 
 @app.post("/runs/{run_id}/approve")
-def post_approve(run_id: str, body: ApproveRequest = None):
-    state_dict = state.get(run_id)
-    if state_dict is None:
-        detail = (
-            f"Run {run_id} is not loaded in memory. Re-open or rerun the "
-            "case before approving it."
-        )
-        if run_exists(run_id):
-            detail = (
-                f"Run {run_id} only exists in the persisted audit trail right "
-                "now. Rerun the case before approving it."
-            )
-        raise HTTPException(
-            status_code=404,
-            detail=detail,
-        )
-    if state_dict["status"] == "escalated":
-        raise HTTPException(status_code=409, detail="Cannot approve an escalated run")
-    if state_dict["status"] == "approved":
-        raise HTTPException(status_code=409, detail="Run already approved")
-    if any(e.get("type") == "approved" for e in read_events(run_id)):
-        raise HTTPException(status_code=409, detail="Run already approved")
-
-    existing = state_dict["recommendation"]
-    if existing is None:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Run {run_id} has no draft recommendation to approve.",
-        )
+def post_approve(
+    run_id: str,
+    response: Response,
+    body: ApproveRequest = None,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
     if body is None:
         body = ApproveRequest()
-    final_recommendation = {
-        "action_type": existing["action_type"],
-        "rationale": existing["rationale"],
-        "draft_text": (
-            body.draft_text if body.draft_text is not None
-            else existing["draft_text"]
-        ),
-    }
+    if idempotency_key is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Idempotency-Key header is required for approval.",
+        )
 
-    approved_by = body.approved_by
+    cached = state.get(run_id)
+    has_log = run_exists(run_id)
+    if not has_log and cached is None:
+        raise HTTPException(status_code=404, detail=_missing_run_detail(run_id))
+    if not has_log and cached is not None and cached.get("status") == "escalated":
+        raise HTTPException(status_code=409, detail="Cannot approve an escalated run")
+    bootstrap_events = None if has_log else cached.get("events")
 
-    ts = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-    event_payload = {"final_recommendation": final_recommendation}
-    if approved_by is not None:
-        event_payload["approved_by"] = approved_by
-    approved_event = {
-        "type": "approved",
-        "timestamp": ts,
-        "payload": event_payload,
-    }
-    state_dict["events"].append(approved_event)
-    state_dict["status"] = "approved"
-    state_dict["recommendation"] = final_recommendation
-    state_dict["approved_by"] = approved_by
-    state.update(run_id, state_dict)
+    try:
+        committed = commit_approval(
+            run_id,
+            draft_text=body.draft_text,
+            approved_by=body.approved_by,
+            idempotency_key=idempotency_key,
+            bootstrap_events=bootstrap_events,
+        )
+    except InvalidIdempotencyKeyError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Idempotency-Key must contain 1-128 printable ASCII characters.",
+        ) from exc
+    except ApprovalRunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=_missing_run_detail(run_id)) from exc
+    except IdempotencyConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Idempotency-Key was already used for a different approval request.",
+        ) from exc
+    except ApprovalAlreadyCommittedError as exc:
+        raise HTTPException(status_code=409, detail="Run already approved") from exc
+    except ApprovalEscalatedError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot approve an escalated run",
+        ) from exc
+    except ApprovalAuditConflictError as exc:
+        logger.warning(
+            "approval rejected by audit validation: run_id=%s reason=%s",
+            run_id,
+            exc.reason,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Persisted audit history is not safe to approve; "
+                "operator recovery is required."
+            ),
+        ) from exc
+    except EventPersistenceError as exc:
+        logger.error(
+            "approval persistence failed: run_id=%s outcome=%s",
+            run_id,
+            exc.outcome,
+        )
+        detail = (
+            "Approval durability is unknown; retry once with the same "
+            "Idempotency-Key to reconfirm. If that retry reports unsafe audit "
+            "history, stop and follow interrupted-bootstrap operator recovery."
+            if exc.outcome == "unknown"
+            else (
+                "Approval was not persisted; do not retry automatically. "
+                "Preserve the audit bytes and follow interrupted-bootstrap "
+                "operator recovery."
+                if not has_log and run_exists(run_id)
+                else "Approval was not persisted; retry with the same Idempotency-Key."
+            )
+        )
+        raise HTTPException(status_code=503, detail=detail) from exc
 
-    append_event(run_id, "approved", event_payload, timestamp=ts)
-
-    return RunStatus.model_validate(state_dict).model_copy(
-        update={"is_replay_response": False}
-    )
+    published = committed.run.model_dump(mode="json")
+    try:
+        state.update(run_id, published)
+    except Exception:
+        logger.error("approved state cache update failed: run_id=%s", run_id)
+    response.headers["Idempotency-Replayed"] = str(committed.replayed).lower()
+    return committed.run
 
 
 @app.get("/runs/{run_id}/replay")
 def get_replay(run_id: str):
-    result = replay_run(run_id)
-    if result is not None:
-        return result
-    state_dict = state.get(run_id)
-    if state_dict is None:
+    try:
+        result = replay_run(run_id)
+    except ReplayValidationError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Persisted audit log cannot be reconstructed safely.",
+        ) from exc
+    except EventPersistenceError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Persisted audit log is temporarily unavailable.",
+        ) from exc
+    if result is None:
         raise HTTPException(
             status_code=404,
-            detail=(
-                f"Replay unavailable for {run_id}. {_missing_run_detail(run_id)}"
-            ),
+            detail=f"Replay unavailable for {run_id}. {_missing_run_detail(run_id)}",
         )
-    return RunStatus.model_validate(state_dict).model_copy(
-        update={"is_replay_response": True}
-    )
+    return result
 
 
 @app.get("/demo-fallback/{case_id}", response_model=RunStatus)

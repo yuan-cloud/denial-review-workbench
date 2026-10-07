@@ -30,6 +30,13 @@ interface Props {
   onBack: () => void;
 }
 
+type ApprovalAttempt = {
+  runId: string;
+  draftText: string;
+  approvedBy: string;
+  key: string;
+};
+
 const srOnlyStyle = {
   position: "absolute",
   width: 1,
@@ -112,11 +119,16 @@ function confidencePresentation(confidence: number | null): {
   };
 }
 
-export default function RunPage({ caseId, runId, onBack }: Props) {
+function isTerminalStatus(status: RunStatus["status"]): boolean {
+  return status === "approved" || status === "escalated";
+}
+
+function RunPageContent({ caseId, runId, onBack }: Props) {
   const [run, setRun] = useState<RunStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetchNotFound, setFetchNotFound] = useState(false);
+  const [replayInvalidation, setReplayInvalidation] = useState(0);
   const [activeQuote, setActiveQuote] = useState<{ doc_id: string; quote: string } | null>(null);
   const [skipLinkFocused, setSkipLinkFocused] = useState(false);
   const [liveMessage, setLiveMessage] = useState("");
@@ -126,27 +138,86 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const previousStatusRef = useRef<RunStatus["status"] | null>(null);
   const previousReplayRef = useRef<boolean | null>(null);
+  const approvalAttemptRef = useRef<ApprovalAttempt | null>(null);
+  const fetchControllerRef = useRef<AbortController | null>(null);
+  const fetchGenerationRef = useRef(0);
+  const resultGenerationRef = useRef(0);
+
+  const publishRunResult = useCallback((data: RunStatus, generation: number) => {
+    setRun((current) => {
+      const isLatest = generation === resultGenerationRef.current;
+      if (!isLatest) {
+        if (
+          current !== null &&
+          !isTerminalStatus(current.status) &&
+          isTerminalStatus(data.status)
+        ) {
+          return data;
+        }
+        return current;
+      }
+      if (
+        current !== null &&
+        isTerminalStatus(current.status) &&
+        data.status !== current.status
+      ) {
+        return current;
+      }
+      return data;
+    });
+  }, []);
 
   const fetchRun = useCallback(() => {
+    fetchControllerRef.current?.abort();
+    const controller = new AbortController();
+    fetchControllerRef.current = controller;
+    const generation = ++fetchGenerationRef.current;
+    const resultGeneration = ++resultGenerationRef.current;
+    setReplayInvalidation((current) => current + 1);
     setLoading(true);
     setFetchError(null);
     setFetchNotFound(false);
-    getRun(runId)
+    getRun(runId, controller.signal)
       .then((data) => {
-        setRun(data);
+        if (
+          controller.signal.aborted ||
+          generation !== fetchGenerationRef.current ||
+          resultGeneration !== resultGenerationRef.current
+        ) {
+          return;
+        }
+        publishRunResult(data, resultGeneration);
         setLoading(false);
       })
       .catch((error) => {
+        if (
+          controller.signal.aborted ||
+          generation !== fetchGenerationRef.current ||
+          resultGeneration !== resultGenerationRef.current
+        ) {
+          return;
+        }
         if (error instanceof ApiError && error.status === 404) {
           setFetchNotFound(true);
         }
         setFetchError(describeError(error));
         setLoading(false);
+      })
+      .finally(() => {
+        if (fetchControllerRef.current === controller) {
+          fetchControllerRef.current = null;
+        }
       });
-  }, [runId]);
+  }, [publishRunResult, runId]);
 
   useEffect(() => {
     fetchRun();
+    return () => {
+      fetchGenerationRef.current += 1;
+      resultGenerationRef.current += 1;
+      fetchControllerRef.current?.abort();
+      fetchControllerRef.current = null;
+    };
   }, [fetchRun]);
 
   useEffect(() => {
@@ -186,16 +257,68 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
 
   const handleApprove = useCallback(
     async (draftText: string) => {
-      const updated = await postApprove(runId, draftText, "local-reviewer");
-      setRun(updated);
+      const resultGeneration = ++resultGenerationRef.current;
+      const approvedBy = "local-reviewer";
+      let attempt = approvalAttemptRef.current;
+      if (
+        attempt === null ||
+        attempt.runId !== runId ||
+        attempt.draftText !== draftText ||
+        attempt.approvedBy !== approvedBy
+      ) {
+        attempt = {
+          runId,
+          draftText,
+          approvedBy,
+          key: crypto.randomUUID(),
+        };
+        approvalAttemptRef.current = attempt;
+      }
+      try {
+        const updated = await postApprove(
+          runId,
+          draftText,
+          approvedBy,
+          attempt.key
+        );
+        if (approvalAttemptRef.current === attempt) {
+          approvalAttemptRef.current = null;
+        }
+        publishRunResult(updated, resultGeneration);
+      } catch (error) {
+        if (resultGeneration !== resultGenerationRef.current) {
+          return;
+        }
+        throw error;
+      }
     },
-    [runId]
+    [publishRunResult, runId]
   );
 
   const handleReplay = useCallback(async () => {
-    const replayed = await getReplay(runId);
-    setRun(replayed);
-  }, [runId]);
+    const activeFetch = fetchControllerRef.current;
+    activeFetch?.abort();
+    if (fetchControllerRef.current === activeFetch) {
+      fetchControllerRef.current = null;
+    }
+    ++fetchGenerationRef.current;
+    const resultGeneration = ++resultGenerationRef.current;
+    setLoading(false);
+    setFetchError(null);
+    setFetchNotFound(false);
+    try {
+      const replayed = await getReplay(runId);
+      if (resultGeneration !== resultGenerationRef.current) {
+        return;
+      }
+      publishRunResult(replayed, resultGeneration);
+    } catch (error) {
+      if (resultGeneration !== resultGenerationRef.current) {
+        return;
+      }
+      throw error;
+    }
+  }, [publishRunResult, runId]);
 
   const handleEvidenceClick = useCallback((docId: string, quote: string) => {
     setActiveQuote({ doc_id: docId, quote });
@@ -534,6 +657,7 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
                 events={run.events}
                 isReplayResponse={run.is_replay_response}
                 onReplay={handleReplay}
+                replayInvalidation={replayInvalidation}
               />
             </WorkbenchPanel>
           </WorkbenchPaneGrid>
@@ -541,4 +665,8 @@ export default function RunPage({ caseId, runId, onBack }: Props) {
       </div>
     </WorkbenchScreen>
   );
+}
+
+export default function RunPage(props: Props) {
+  return <RunPageContent key={props.runId} {...props} />;
 }

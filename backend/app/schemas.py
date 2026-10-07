@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 from typing import Any, Literal, Optional
 from datetime import datetime
 
@@ -35,6 +35,19 @@ class Recommendation(BaseModel):
     action_type: str
     rationale: str
     draft_text: str
+
+
+IDEMPOTENCY_VERSION = 1
+
+
+class ApprovedIdempotencyMetadata(BaseModel):
+    """Strict metadata attached to newly committed approval events."""
+
+    model_config = ConfigDict(strict=True)
+
+    version: StrictInt = Field(ge=IDEMPOTENCY_VERSION, le=IDEMPOTENCY_VERSION)
+    key_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class CaseListItem(BaseModel):

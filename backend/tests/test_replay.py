@@ -1,10 +1,13 @@
 """Tests for app.replay — read-only JSONL reconstruction."""
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
+import pytest
+
 from app.event_store import append_event, read_events
-from app.replay import replay_run, resolve_status
+from app.replay import ReplayValidationError, replay_events, replay_run, resolve_status
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = REPO_ROOT / "data"
@@ -15,6 +18,12 @@ def _load_mock_run(case_id: str) -> dict:
     path = DATA_DIR / "cases" / case_id / "mock_run.json"
     with open(path) as f:
         return json.load(f)
+
+
+def _events_for_case(case_id: str, run_id: str) -> list[dict]:
+    events = deepcopy(_load_mock_run(case_id)["events"])
+    events[0]["payload"]["run_id"] = run_id
+    return events
 
 
 def test_replay_returns_none_for_missing(tmp_runs):
@@ -76,6 +85,130 @@ def test_replay_reconstructs_full_pipeline(tmp_runs):
     assert result.recommendation.action_type == "approve_or_proceed"
     assert len(result.documents) == 1
     assert len(result.events) == 7
+
+
+@pytest.mark.parametrize(
+    ("case_id", "mutate", "reason"),
+    [
+        (
+            "case-002",
+            lambda events: events[2]["payload"]["facts"].update(confidence=True),
+            "invalid_facts_payload",
+        ),
+        (
+            "case-002",
+            lambda events: events[4]["payload"]["findings"].update(
+                should_escalate=1
+            ),
+            "invalid_findings_decision",
+        ),
+        (
+            "case-003",
+            lambda events: events.append(
+                {
+                    "type": "run_escalated",
+                    "timestamp": "2026-04-11T15:00:06Z",
+                    "payload": {"reason": "escalated", "conflict_count": True},
+                }
+            ),
+            "invalid_escalation_payload",
+        ),
+    ],
+    ids=["boolean-confidence", "integer-escalation", "invalid-escalation-marker"],
+)
+def test_replay_rejects_semantically_invalid_events_without_strict_sequence(
+    case_id,
+    mutate,
+    reason,
+):
+    run_id = f"run-semantic-validation-{case_id}"
+    events = _events_for_case(case_id, run_id)
+    mutate(events)
+
+    with pytest.raises(ReplayValidationError) as raised:
+        replay_events(run_id, events)
+
+    assert raised.value.reason == reason
+
+
+def test_replay_rejects_unknown_event_type_without_strict_sequence():
+    run_id = "run-unknown-event"
+    events = _events_for_case("case-002", run_id)
+    events.append(
+        {
+            "type": "unknown_event",
+            "timestamp": "2026-04-11T15:00:09Z",
+            "payload": {},
+        }
+    )
+
+    with pytest.raises(ReplayValidationError) as raised:
+        replay_events(run_id, events)
+
+    assert raised.value.reason == "invalid_event_type"
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {
+            "version": "1",
+            "key_sha256": "a" * 64,
+            "request_sha256": "b" * 64,
+        },
+        {
+            "version": True,
+            "key_sha256": "a" * 64,
+            "request_sha256": "b" * 64,
+        },
+        None,
+    ],
+    ids=["string-version", "boolean-version", "present-null"],
+)
+def test_replay_rejects_malformed_present_approved_idempotency(metadata):
+    run_id = "run-invalid-approved-idempotency"
+    events = _events_for_case("case-002", run_id)
+    events.append(
+        {
+            "type": "approved",
+            "timestamp": "2026-04-11T15:00:09Z",
+            "payload": {
+                "final_recommendation": deepcopy(
+                    events[5]["payload"]["recommendation"]
+                ),
+                "idempotency": metadata,
+            },
+        }
+    )
+
+    with pytest.raises(ReplayValidationError) as raised:
+        replay_events(run_id, events)
+
+    assert raised.value.reason == "invalid_approved_idempotency"
+
+
+@pytest.mark.parametrize(
+    "include_marker",
+    [False, True],
+    ids=["legacy-analysis-terminal", "marked-escalation"],
+)
+def test_replay_reads_legacy_and_marked_escalated_histories(include_marker):
+    run_id = f"run-escalation-{include_marker}"
+    events = _events_for_case("case-003", run_id)
+    if include_marker:
+        events.append(
+            {
+                "type": "run_escalated",
+                "timestamp": "2026-04-11T15:00:06Z",
+                "payload": {"reason": "escalated", "conflict_count": 1},
+            }
+        )
+
+    result = replay_events(run_id, events)
+
+    assert result is not None
+    assert result.status == "escalated"
+    assert result.recommendation is None
 
 
 def test_replay_approved_state(tmp_runs):

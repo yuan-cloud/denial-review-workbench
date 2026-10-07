@@ -2,8 +2,10 @@
 
 import json
 import re
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
+
 import pytest
 
 from app.errors import PipelineError
@@ -13,9 +15,9 @@ from app.pipeline import (
     _canonicalize_missing_item,
     _missing_item_supported,
     _normalize_action_type,
-    _normalize_facts_payload,
     _normalize_missing_items,
     _parse_json,
+    extract_facts,
     load_documents,
     make_run_id,
 )
@@ -27,18 +29,39 @@ from app.schemas import CaseDocument, CaseFindings
 class TestMakeRunId:
     def test_format(self):
         rid = make_run_id("case-001")
-        assert rid.startswith("run-case-001-")
-        # Timestamp portion should be 14 digits (YYYYMMDDHHmmSS)
-        ts_part = rid.replace("run-case-001-", "")
-        assert re.match(r"^\d{14}$", ts_part)
+        assert re.fullmatch(
+            r"run-case-001-\d{20}-[0-9a-f]{32}",
+            rid,
+        )
 
-    def test_unique_per_call(self):
-        # Two sequential calls should produce different IDs (or same if within 1 second)
-        r1 = make_run_id("c")
-        r2 = make_run_id("c")
-        # They embed datetime, so at least format is consistent
-        assert r1.startswith("run-c-")
-        assert r2.startswith("run-c-")
+    def test_unique_with_fixed_clock(self, monkeypatch):
+        class FixedDateTime:
+            @staticmethod
+            def now(tz):
+                assert tz is UTC
+                return datetime(2026, 10, 7, 3, 41, 32, tzinfo=UTC)
+
+        monkeypatch.setattr("app.pipeline.datetime", FixedDateTime)
+        run_ids = [make_run_id("case-002") for _ in range(1_000)]
+
+        assert len(set(run_ids)) == len(run_ids)
+        assert all(
+            run_id.startswith("run-case-002-20261007034132000000-")
+            for run_id in run_ids
+        )
+
+    def test_unique_across_concurrent_calls(self, monkeypatch):
+        class FixedDateTime:
+            @staticmethod
+            def now(tz):
+                assert tz is UTC
+                return datetime(2026, 10, 7, 3, 41, 32, tzinfo=UTC)
+
+        monkeypatch.setattr("app.pipeline.datetime", FixedDateTime)
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            run_ids = list(executor.map(make_run_id, ["case-002"] * 512))
+
+        assert len(set(run_ids)) == len(run_ids)
 
 
 class TestLoadDocuments:
@@ -223,27 +246,42 @@ class TestNormalizeActionType:
             assert target in valid_targets, f"alias '{alias}' maps to unknown target '{target}'"
 
 
-class TestNormalizeFactsPayload:
+class TestExtractFactsConfidence:
     def _make_docs(self, text: str) -> list[CaseDocument]:
         return [CaseDocument(doc_id="d", type="denial_letter", text=text)]
 
-    def test_boosts_confidence_for_approved(self):
-        docs = self._make_docs("authorization approved for patient")
-        payload = {"denial_reason": "some reason", "confidence": 0.5}
-        result = _normalize_facts_payload(payload, docs)
-        assert result["confidence"] >= 0.85
+    @pytest.mark.parametrize(
+        "document_text",
+        [
+            "Authorization approved for this service.",
+            "Authorization was not approved for this service.",
+            "If authorization is approved, the service may begin.",
+            "It is uncertain whether authorization was approved.",
+        ],
+        ids=["affirmative", "negated", "conditional", "uncertain"],
+    )
+    def test_approval_wording_does_not_override_confidence(
+        self,
+        document_text,
+        monkeypatch,
+    ):
+        docs = self._make_docs(document_text)
+        payload = {
+            "payer": "Example Health Plan",
+            "service_requested": "Skilled nursing",
+            "denial_reason": "some reason",
+            "required_documents": [],
+            "confidence": 0.5,
+            "evidence_refs": [],
+        }
+        monkeypatch.setattr(
+            "app.pipeline.call_model",
+            lambda system, user: json.dumps(payload),
+        )
 
-    def test_no_boost_for_real_denial(self):
-        docs = self._make_docs("coverage denied for service")
-        payload = {"denial_reason": "not medically necessary", "confidence": 0.5}
-        result = _normalize_facts_payload(payload, docs)
-        assert result["confidence"] == 0.5
+        result = extract_facts(docs)
 
-    def test_keeps_high_confidence_unchanged(self):
-        docs = self._make_docs("authorization approved")
-        payload = {"denial_reason": "approved", "confidence": 0.95}
-        result = _normalize_facts_payload(payload, docs)
-        assert result["confidence"] == 0.95
+        assert result.confidence == 0.5
 
 
 # ==================== bd-38p.2.3: prompt construction constants ====================

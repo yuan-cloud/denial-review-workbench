@@ -99,6 +99,17 @@ describe("getRun", () => {
     mockFetch.mockResolvedValueOnce(errorResponse(404));
     await expect(getRun("missing")).rejects.toThrow("GET /runs/missing failed: 404");
   });
+
+  it("forwards an abort signal", async () => {
+    const controller = new AbortController();
+    mockFetch.mockResolvedValueOnce(okResponse({ run_id: "r1" }));
+
+    await getRun("r1", controller.signal);
+
+    expect(mockFetch).toHaveBeenCalledWith("http://localhost:8000/runs/r1", {
+      signal: controller.signal,
+    });
+  });
 });
 
 describe("postRun", () => {
@@ -128,18 +139,26 @@ describe("postApprove", () => {
     const data = { run_id: "r1", status: "approved" };
     mockFetch.mockResolvedValueOnce(okResponse(data));
 
-    const result = await postApprove("r1", "edited text", "reviewer-1");
+    const result = await postApprove(
+      "r1",
+      "edited text",
+      "reviewer-1",
+      "approval-key-1"
+    );
     expect(result).toEqual(data);
     expect(mockFetch).toHaveBeenCalledWith("http://localhost:8000/runs/r1/approve", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": "approval-key-1",
+      },
       body: JSON.stringify({ draft_text: "edited text", approved_by: "reviewer-1" }),
     });
   });
 
   it("sends null draft_text and approved_by when omitted", async () => {
     mockFetch.mockResolvedValueOnce(okResponse({ status: "approved" }));
-    await postApprove("r1");
+    await postApprove("r1", undefined, undefined, "approval-key-2");
     const call = mockFetch.mock.calls[0];
     expect(JSON.parse(call[1].body)).toEqual({ draft_text: null, approved_by: null });
   });
@@ -148,9 +167,18 @@ describe("postApprove", () => {
     mockFetch.mockResolvedValueOnce(
       errorResponse(409, { detail: "Run already approved" })
     );
-    await expect(postApprove("r1")).rejects.toThrow(
+    await expect(
+      postApprove("r1", undefined, undefined, "approval-key-3")
+    ).rejects.toThrow(
       "POST /runs/r1/approve failed: 409 (Run already approved)"
     );
+  });
+
+  it("rejects a call without an idempotency key before fetch", async () => {
+    await expect(postApprove("r1", "text", "reviewer-1")).rejects.toThrow(
+      "Approval requires an idempotency key"
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 
